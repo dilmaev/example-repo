@@ -48,15 +48,16 @@ function isItemAvailable(item: ItemToBuy): boolean {
 	}
 
 	// Получаем информацию о предмете
-	const abilityData = AbilityData.GetAbilityByID(item.id)
+	const abilityData = AbilityData.GetAbilityByName(item.itemName)
 	if (!abilityData) {
-		console.log(`Не найдена информация о предмете ${item.name} (ID: ${item.id})`)
+		console.log(`Не найдена информация о предмете ${item.name} (itemName: ${item.itemName})`)
 		return false
 	}
 
 	// Проверяем наличие предмета в StockInfo
 	for (const stock of GameRules.StockInfo) {
-		if (stock.AbilityID === item.id) {
+		console.log(`Проверяем предмет ${item.name}: AbilityID=${stock.AbilityID}, StockCount=${stock.StockCount}`)
+		if (stock.GetAbilityName() === item.itemName) {
 			console.log(`${item.name}: доступно ${stock.StockCount} шт.`)
 			return stock.StockCount > 0
 		}
