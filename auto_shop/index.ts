@@ -39,42 +39,68 @@ const ITEMS_TO_BUY: ItemToBuy[] = [
 	// Можно добавить другие предметы, просто добавив новые объекты в этот массив
 ]
 
+// Кэш для хранения доступности предметов
+const itemAvailabilityCache = new Map<string, { available: boolean, lastChecked: number }>()
+
+// Время в секундах, в течение которого кэш считается актуальным
+const CACHE_TTL = 2
+
 // Функция для проверки, доступен ли предмет в лавке
 function isItemAvailable(item: ItemToBuy): boolean {
+	// Проверяем кэш
+	const now = GameState.RawGameTime
+	const cacheKey = item.itemName
+	const cachedValue = itemAvailabilityCache.get(cacheKey)
+	
+	// Если в кэше есть актуальное значение, используем его
+	if (cachedValue && now - cachedValue.lastChecked < CACHE_TTL) {
+		return cachedValue.available
+	}
+	
 	// Проверяем, что GameRules существует
 	if (!GameRules) {
-		console.log("GameRules не определен")
 		return false
 	}
 
-	// Получаем информацию о предмете
-	const abilityData = AbilityData.GetAbilityByName(item.itemName)
-	if (!abilityData) {
-		console.log(`Не найдена информация о предмете ${item.name} (itemName: ${item.itemName})`)
-		return false
-	}
-
-	// Проверяем наличие предмета в StockInfo
+	// Получаем информацию о предмете (используем только itemName для проверки)
+	let isAvailable = false
+	
+	// Оптимизированная проверка наличия предмета в StockInfo
 	for (const stock of GameRules.StockInfo) {
-		console.log(`Проверяем предмет ${item.name}: AbilityID=${stock.AbilityID}, StockCount=${stock.StockCount}`)
-		if (stock.GetAbilityName() === item.itemName) {
-			console.log(`${item.name}: доступно ${stock.StockCount} шт.`)
-			return stock.StockCount > 0
+		const stockItemName = stock.GetAbilityName()
+		if (stockItemName === item.itemName && stock.StockCount > 0) {
+			isAvailable = true
+			break
 		}
 	}
-
-	console.log(`${item.name} не найден в StockInfo`)
-	return false
+	
+	// Сохраняем результат в кэш
+	itemAvailabilityCache.set(cacheKey, { available: isAvailable, lastChecked: now })
+	
+	return isAvailable
 }
+
+// Переменная для отслеживания времени последней покупки каждого предмета
+const lastPurchaseTime = new Map<string, number>()
+
+// Минимальный интервал между покупками одного и того же предмета (в секундах)
+const PURCHASE_COOLDOWN = 1
 
 // Функция для покупки предмета
 function buyItem(hero: Unit, item: ItemToBuy) {
-	console.log(`Покупаем ${item.name}`)
+	const now = GameState.RawGameTime
+	const lastPurchase = lastPurchaseTime.get(item.itemName) || 0
 	
-	// Используем TaskManager для надежного выполнения покупки
+	// Проверяем, прошло ли достаточно времени с последней покупки этого предмета
+	if (now - lastPurchase < PURCHASE_COOLDOWN) {
+		return
+	}
+	
+	// Используем TaskManager для надежного выполнения покупки, но без лишних проверок внутри
 	TaskManager.Begin(() => {
-		if (hero.IsValid && hero.IsAlive) {
+		if (hero.IsValid) {
 			hero.PurchaseItem(item.id, false, false)
+			lastPurchaseTime.set(item.itemName, now)
 		}
 	})
 }
@@ -84,14 +110,12 @@ function checkAndBuyItems() {
 	// Получаем локального героя
 	const hero = LocalPlayer?.Hero
 	
-	// Проверяем, что герой существует и жив
-	if (hero && hero.IsValid && hero.IsAlive) {
+	// Проверяем, что герой существует
+	if (hero && hero.IsValid) {
 		// Для каждого предмета пытаемся купить, если он доступен в лавке
 		for (const item of ITEMS_TO_BUY) {
 			if (isItemAvailable(item)) {
 				buyItem(hero, item)
-			} else {
-				console.log(`${item.name} недоступен в лавке`)
 			}
 		}
 	}
@@ -101,11 +125,13 @@ function checkAndBuyItems() {
 let lastCheckTime = 0
 
 // Интервал регулярной проверки (в секундах)
-const CHECK_INTERVAL = 1 // Проверять каждую секунду для быстрой покупки
+const CHECK_INTERVAL = 2 // Увеличиваем интервал проверки для снижения нагрузки
 
 // Запускаем проверку при старте игры
 EventsSDK.on("GameStarted", () => {
-	console.log("Скрипт автоматической покупки предметов запущен!")
+	// Сбрасываем кэши при старте игры
+	itemAvailabilityCache.clear()
+	lastPurchaseTime.clear()
 	
 	// Устанавливаем начальное время проверки
 	lastCheckTime = GameState.RawGameTime
@@ -126,11 +152,12 @@ EventsSDK.on("Tick", () => {
 	}
 })
 
-// Также проверяем при возрождении героя
+// Также проверяем при возрождении героя, но с использованием таймера
 EventsSDK.on("UnitSpawned", unit => {
 	// Проверяем, что это локальный герой
 	if (unit === LocalPlayer?.Hero) {
-		console.log("Герой возродился, проверяем наличие предметов")
-		checkAndBuyItems()
+		// Устанавливаем время последней проверки немного в прошлое,
+		// чтобы проверка выполнилась при следующем тике
+		lastCheckTime = GameState.RawGameTime - CHECK_INTERVAL + 0.5
 	}
-})
+}) 
