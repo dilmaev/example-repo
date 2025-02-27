@@ -81,7 +81,7 @@ new (class CAutoShop {
 		}
 		
 		// Выводим в консоль текущие доступные предметы для отладки
-		console.log("Проверка StockInfo:")
+		console.log("=== Начало проверки StockInfo ===")
 		
 		// Проверяем, что StockInfo существует и содержит элементы
 		if (!GameRules.StockInfo || GameRules.StockInfo.length === 0) {
@@ -94,18 +94,31 @@ new (class CAutoShop {
 		// Проходим по всем предметам в StockInfo и отмечаем доступные
 		for (const stock of GameRules.StockInfo) {
 			// Проверяем валидность объекта stock
-			if (!stock || !stock.GetAbilityName) {
+			if (!stock || typeof stock.GetAbilityName !== 'function' || typeof stock.StockCount !== 'number') {
 				console.log("Невалидный элемент в StockInfo")
 				continue
 			}
 			
-			const stockItemName = stock.GetAbilityName()
-			const stockCount = stock.StockCount
-			
-			console.log(`Предмет ${stockItemName}: доступно ${stockCount}`)
-			
-			if (stockCount > 0) {
-				availableItems.set(stockItemName, true)
+			try {
+				const stockItemName = stock.GetAbilityName()
+				const stockCount = stock.StockCount
+				
+				// Проверяем имя и количество
+				if (!stockItemName || stockCount === undefined) {
+					continue
+				}
+				
+				// Записываем информацию о важных предметах
+				const isWatchedItem = this.ITEMS_TO_BUY.some(item => item.itemName === stockItemName)
+				if (isWatchedItem) {
+					console.log(`Важный предмет ${stockItemName}: доступно ${stockCount}`)
+				}
+				
+				if (stockCount > 0) {
+					availableItems.set(stockItemName, true)
+				}
+			} catch (e) {
+				console.log(`Ошибка при получении данных предмета: ${e}`)
 			}
 		}
 		
@@ -115,12 +128,13 @@ new (class CAutoShop {
 		for (const item of this.ITEMS_TO_BUY) {
 			if (this.menu.isItemEnabled(item.itemName)) {
 				const isAvailable = availableItems.has(item.itemName)
-				console.log(`Предмет для покупки ${item.name} (${item.itemName}): ${isAvailable ? 'доступен' : 'недоступен'}`)
+				console.log(`Предмет для покупки ${item.name} (${item.itemName}): ${isAvailable ? 'ДОСТУПЕН' : 'НЕДОСТУПЕН'} в магазине`)
 			} else {
 				console.log(`Предмет ${item.name} (${item.itemName}) отключен в меню`)
 			}
 		}
 		
+		console.log("=== Конец проверки StockInfo ===")
 		return availableItems
 	}
 	
@@ -133,7 +147,7 @@ new (class CAutoShop {
 		
 		const now = GameState.RawGameTime
 		
-		// Обновляем кэш доступных предметов, если прошло больше времени кэширования
+		// Обновляем кэш доступных предметов, если прошло больше времени кэширования или кэш не создан
 		const cacheTime = 2 // Время в секундах, в течение которого кэш считается актуальным
 		if (!this.availableItemsCache || now - this.lastCacheUpdateTime >= cacheTime) {
 			this.availableItemsCache = this.getAvailableItemsMap()
@@ -141,25 +155,30 @@ new (class CAutoShop {
 		}
 		
 		// Проверяем, есть ли предмет в кэше доступных предметов
-		return this.availableItemsCache.has(item.itemName)
+		const available = this.availableItemsCache.has(item.itemName)
+		if (!available) {
+			console.log(`Проверка доступности: ${item.name} (${item.itemName}) НЕДОСТУПЕН в магазине`)
+		}
+		return available
 	}
 	
 	// Функция для покупки предмета
 	private buyItem(hero: Unit, item: ItemToBuy) {
+		// Финальная проверка наличия предмета в кэше доступных предметов
+		// Это гарантирует, что мы не попытаемся купить предмет, который недоступен
+		if (!this.availableItemsCache || !this.availableItemsCache.has(item.itemName)) {
+			console.log(`ОТМЕНА ПОКУПКИ: ${item.name} отсутствует в кэше доступных предметов`)
+			return false
+		}
+		
 		// Проверяем, не спит ли покупка для этого предмета
 		if (this.sleeper.Sleeping(`buy_${item.itemName}`)) {
 			console.log(`Слипер активен для ${item.name}, пропускаем покупку`)
-			return
-		}
-		
-		// Проверяем наличие предмета в кэше доступных предметов
-		if (!this.availableItemsCache || !this.availableItemsCache.has(item.itemName)) {
-			console.log(`${item.name} отсутствует в кэше доступных предметов, пропускаем покупку`)
-			return
+			return false
 		}
 		
 		// Выводим информацию о покупке
-		console.log(`Покупаем ${item.name}`)
+		console.log(`=== ПОКУПАЕМ ${item.name} ===`)
 		
 		// Используем TaskManager для надежного выполнения покупки
 		TaskManager.Begin(() => {
@@ -168,10 +187,14 @@ new (class CAutoShop {
 				// Устанавливаем слипер для предотвращения повторной покупки
 				this.sleeper.Sleep(this.PURCHASE_COOLDOWN * 1000, `buy_${item.itemName}`)
 				console.log(`Установлен слипер на ${this.PURCHASE_COOLDOWN} сек для ${item.name}`)
+				return true
 			} else {
 				console.log(`Герой невалиден, не удалось купить ${item.name}`)
+				return false
 			}
 		})
+		
+		return true
 	}
 	
 	// Основная функция для проверки и покупки предметов
@@ -186,11 +209,34 @@ new (class CAutoShop {
 		
 		// Проверяем, что герой существует
 		if (hero && hero.IsValid) {
+			// Сначала обновляем кэш доступных предметов
+			const now = GameState.RawGameTime
+			const cacheTime = 2 // Время в секундах, в течение которого кэш считается актуальным
+			
+			if (!this.availableItemsCache || now - this.lastCacheUpdateTime >= cacheTime) {
+				console.log("Обновляем кэш доступных предметов перед проверкой")
+				this.availableItemsCache = this.getAvailableItemsMap()
+				this.lastCacheUpdateTime = now
+			}
+			
 			// Для каждого предмета пытаемся купить, если он доступен в лавке
+			let itemsPurchased = 0
+			
 			for (const item of this.ITEMS_TO_BUY) {
-				if (this.isItemAvailable(item)) {
-					this.buyItem(hero, item)
+				// Проверяем доступность с использованием обновленного кэша
+				if (this.menu.isItemEnabled(item.itemName) && 
+					this.availableItemsCache && 
+					this.availableItemsCache.has(item.itemName) &&
+					!this.sleeper.Sleeping(`buy_${item.itemName}`)) {
+					
+					if (this.buyItem(hero, item)) {
+						itemsPurchased++
+					}
 				}
+			}
+			
+			if (itemsPurchased === 0) {
+				console.log("Нет доступных предметов для покупки в этой проверке")
 			}
 		}
 	}
@@ -198,6 +244,7 @@ new (class CAutoShop {
 	// Обработчик события начала игры
 	private GameStarted() {
 		// Сбрасываем кэши при старте игры
+		console.log("== Игра начата: сброс кэша ==")
 		this.availableItemsCache = null
 		this.lastCacheUpdateTime = 0
 		this.lastCheckTime = GameState.RawGameTime
@@ -207,6 +254,7 @@ new (class CAutoShop {
 	// Обработчик события окончания игры
 	private GameEnded() {
 		// Сбрасываем кэши при окончании игры
+		console.log("== Игра окончена: сброс кэша ==")
 		this.availableItemsCache = null
 		this.lastCacheUpdateTime = 0
 		this.sleeper.FullReset()
