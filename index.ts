@@ -5,8 +5,7 @@ import {
 	LocalPlayer,
 	DOTAGameUIState,
 	TaskManager,
-	Shop,
-	ShopType
+	Shop
 } from "github.com/octarine-public/wrapper/index"
 
 // Структура для настройки автоматической покупки предметов
@@ -72,7 +71,7 @@ function countItems(hero: Unit, item: ItemToBuy): number {
 
 // Проверка, доступен ли предмет в магазине
 function isItemAvailable(item: ItemToBuy): boolean {
-	return Shop.GetItemStockCount(item.id, ShopType.Base) > 0
+	return Shop.GetItemStockCount(item.id) > 0
 }
 
 // Основная функция для проверки и покупки предметов
@@ -89,7 +88,7 @@ function checkAndBuyItems() {
 			
 			// Проверяем, доступен ли предмет в магазине
 			const available = isItemAvailable(item)
-			const stockCount = Shop.GetItemStockCount(item.id, ShopType.Base)
+			const stockCount = Shop.GetItemStockCount(item.id)
 			
 			console.log(`${item.name}: в инвентаре ${itemCount}, доступно в магазине: ${stockCount}`)
 			
