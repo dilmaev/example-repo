@@ -31,11 +31,11 @@ const ITEMS_TO_BUY: ItemToBuy[] = [
 		itemName: "item_ward_sentry",
 		dispenser: "item_ward_dispenser"
 	},
-	{
-		id: 188,
-		name: "Smoke of Deceit",
-		itemName: "item_smoke_of_deceit"
-	}
+	// {
+	// 	id: 188,
+	// 	name: "Smoke of Deceit",
+	// 	itemName: "item_smoke_of_deceit"
+	// }
 	// Можно добавить другие предметы, просто добавив новые объекты в этот массив
 ]
 
