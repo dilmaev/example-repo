@@ -76,14 +76,29 @@ new (class CAutoShop {
 		
 		// Проверяем, что GameRules существует
 		if (!GameRules) {
+			console.log("GameRules не существует")
 			return availableItems
 		}
 		
 		// Выводим в консоль текущие доступные предметы для отладки
 		console.log("Проверка StockInfo:")
 		
+		// Проверяем, что StockInfo существует и содержит элементы
+		if (!GameRules.StockInfo || GameRules.StockInfo.length === 0) {
+			console.log("StockInfo пуст или не существует")
+			return availableItems
+		}
+		
+		console.log(`Найдено ${GameRules.StockInfo.length} предметов в StockInfo`)
+		
 		// Проходим по всем предметам в StockInfo и отмечаем доступные
 		for (const stock of GameRules.StockInfo) {
+			// Проверяем валидность объекта stock
+			if (!stock || !stock.GetAbilityName) {
+				console.log("Невалидный элемент в StockInfo")
+				continue
+			}
+			
 			const stockItemName = stock.GetAbilityName()
 			const stockCount = stock.StockCount
 			
@@ -94,11 +109,15 @@ new (class CAutoShop {
 			}
 		}
 		
+		console.log(`Всего доступно ${availableItems.size} предметов`)
+		
 		// Выводим список предметов, которые мы хотим купить
 		for (const item of this.ITEMS_TO_BUY) {
 			if (this.menu.isItemEnabled(item.itemName)) {
 				const isAvailable = availableItems.has(item.itemName)
 				console.log(`Предмет для покупки ${item.name} (${item.itemName}): ${isAvailable ? 'доступен' : 'недоступен'}`)
+			} else {
+				console.log(`Предмет ${item.name} (${item.itemName}) отключен в меню`)
 			}
 		}
 		
@@ -129,11 +148,13 @@ new (class CAutoShop {
 	private buyItem(hero: Unit, item: ItemToBuy) {
 		// Проверяем, не спит ли покупка для этого предмета
 		if (this.sleeper.Sleeping(`buy_${item.itemName}`)) {
+			console.log(`Слипер активен для ${item.name}, пропускаем покупку`)
 			return
 		}
 		
 		// Проверяем наличие предмета в кэше доступных предметов
 		if (!this.availableItemsCache || !this.availableItemsCache.has(item.itemName)) {
+			console.log(`${item.name} отсутствует в кэше доступных предметов, пропускаем покупку`)
 			return
 		}
 		
@@ -146,6 +167,9 @@ new (class CAutoShop {
 				hero.PurchaseItem(item.id, false, false)
 				// Устанавливаем слипер для предотвращения повторной покупки
 				this.sleeper.Sleep(this.PURCHASE_COOLDOWN * 1000, `buy_${item.itemName}`)
+				console.log(`Установлен слипер на ${this.PURCHASE_COOLDOWN} сек для ${item.name}`)
+			} else {
+				console.log(`Герой невалиден, не удалось купить ${item.name}`)
 			}
 		})
 	}
@@ -201,6 +225,7 @@ new (class CAutoShop {
 		// Регулярная проверка каждые checkInterval секунд
 		const currentTime = GameState.RawGameTime
 		if (currentTime - this.lastCheckTime >= checkInterval) {
+			console.log(`Выполняем проверку при интервале ${checkInterval} сек. (значение слайдера: ${this.menu.CheckIntervalSlider.value})`)
 			this.checkAndBuyItems()
 			this.lastCheckTime = currentTime
 		}
