@@ -4,10 +4,10 @@ import {
 	Unit,
 	LocalPlayer,
 	DOTAGameUIState,
-	TaskManager
+	TaskManager,
+	GameRules,
+	AbilityData
 } from "github.com/octarine-public/wrapper/index"
-import { AbilityData } from "../../octarine-public/wrapper/wrapper/Objects/DataBook/AbilityData"
-import { GameRules } from "../../octarine-public/wrapper/wrapper/Objects/Base/Entity"
 
 // Структура для настройки автоматической покупки предметов
 interface ItemToBuy {
@@ -41,12 +41,29 @@ const ITEMS_TO_BUY: ItemToBuy[] = [
 
 // Функция для проверки, доступен ли предмет в лавке
 function isItemAvailable(item: ItemToBuy): boolean {
-	// Проверяем наличие предмета через GameRules.StockInfo
-	return GameRules.StockInfo.some(stock => {
-		const abilityData = AbilityData.GetAbilityByName(item.itemName)
-		if (!abilityData) return false
-		return stock.AbilityID === abilityData.ID && stock.IsAvalible
-	})
+	// Проверяем, что GameRules существует
+	if (!GameRules) {
+		console.log("GameRules не определен")
+		return false
+	}
+
+	// Получаем информацию о предмете
+	const abilityData = AbilityData.GetAbilityByID(item.id)
+	if (!abilityData) {
+		console.log(`Не найдена информация о предмете ${item.name} (ID: ${item.id})`)
+		return false
+	}
+
+	// Проверяем наличие предмета в StockInfo
+	for (const stock of GameRules.StockInfo) {
+		if (stock.AbilityID === item.id) {
+			console.log(`${item.name}: доступно ${stock.StockCount} шт.`)
+			return stock.StockCount > 0
+		}
+	}
+
+	console.log(`${item.name} не найден в StockInfo`)
+	return false
 }
 
 // Функция для покупки предмета
