@@ -4,8 +4,7 @@ import {
 	Unit,
 	LocalPlayer,
 	DOTAGameUIState,
-	TaskManager,
-	Shop
+	TaskManager
 } from "github.com/octarine-public/wrapper/index"
 
 // Структура для настройки автоматической покупки предметов
@@ -14,6 +13,7 @@ interface ItemToBuy {
 	name: string     // Имя предмета для логов
 	itemName: string // Имя предмета в инвентаре
 	dispenser?: string // Имя диспенсера, если предмет может быть в нем
+	minCount: number   // Минимальное количество предметов, которое нужно иметь
 }
 
 // Массив предметов для автоматической покупки
@@ -22,18 +22,21 @@ const ITEMS_TO_BUY: ItemToBuy[] = [
 		id: 42,
 		name: "Observer Ward",
 		itemName: "item_ward_observer",
-		dispenser: "item_ward_dispenser"
+		dispenser: "item_ward_dispenser",
+		minCount: 2
 	},
 	{
 		id: 43,
 		name: "Sentry Ward",
 		itemName: "item_ward_sentry",
-		dispenser: "item_ward_dispenser"
+		dispenser: "item_ward_dispenser",
+		minCount: 2
 	},
 	{
 		id: 188,
 		name: "Smoke of Deceit",
-		itemName: "item_smoke_of_deceit"
+		itemName: "item_smoke_of_deceit",
+		minCount: 1
 	}
 	// Можно добавить другие предметы, просто добавив новые объекты в этот массив
 ]
@@ -50,7 +53,7 @@ function buyItem(hero: Unit, item: ItemToBuy) {
 	})
 }
 
-// Функция для подсчета количества предметов в инвентаре (для информации)
+// Функция для подсчета количества предметов в инвентаре
 function countItems(hero: Unit, item: ItemToBuy): number {
 	let count = 0
 	
@@ -69,11 +72,6 @@ function countItems(hero: Unit, item: ItemToBuy): number {
 	return count
 }
 
-// Проверка, доступен ли предмет в магазине
-function isItemAvailable(item: ItemToBuy): boolean {
-	return Shop.GetItemStockCount(item.id) > 0
-}
-
 // Основная функция для проверки и покупки предметов
 function checkAndBuyItems() {
 	// Получаем локального героя
@@ -83,17 +81,13 @@ function checkAndBuyItems() {
 	if (hero && hero.IsValid && hero.IsAlive) {
 		// Проверяем каждый предмет из списка
 		for (const item of ITEMS_TO_BUY) {
-			// Подсчитываем количество предметов в инвентаре (только для логов)
+			// Подсчитываем количество предметов в инвентаре
 			const itemCount = countItems(hero, item)
 			
-			// Проверяем, доступен ли предмет в магазине
-			const available = isItemAvailable(item)
-			const stockCount = Shop.GetItemStockCount(item.id)
+			console.log(`${item.name}: в инвентаре ${itemCount}`)
 			
-			console.log(`${item.name}: в инвентаре ${itemCount}, доступно в магазине: ${stockCount}`)
-			
-			// Если предмет доступен, покупаем его
-			if (available) {
+			// Если количество предметов меньше минимального, пытаемся купить
+			if (itemCount < item.minCount) {
 				buyItem(hero, item)
 			}
 		}
@@ -114,16 +108,11 @@ EventsSDK.on("GameStarted", () => {
 	lastCheckTime = GameState.RawGameTime
 })
 
-// Проверяем периодически и при обновлении магазина
+// Проверяем периодически
 EventsSDK.on("Tick", () => {
 	// Проверяем, находимся ли мы в игре
 	if (GameState.UIState !== DOTAGameUIState.DOTA_GAME_UI_DOTA_INGAME) {
 		return
-	}
-	
-	// Проверка при обновлении магазина
-	if (Shop.LastUpdateTick) {
-		checkAndBuyItems()
 	}
 	
 	// Регулярная проверка каждые CHECK_INTERVAL секунд
