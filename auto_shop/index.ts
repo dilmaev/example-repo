@@ -97,7 +97,7 @@ new (class CAutoShop {
 			const unreliableGold = playerData.UnreliableGold
 			const totalGold = reliableGold + unreliableGold
 			
-			console.log(`Текущее золото героя: ${totalGold} (надежное: ${reliableGold}, ненадежное: ${unreliableGold})`)
+			// console.log(`Текущее золото героя: ${totalGold} (надежное: ${reliableGold}, ненадежное: ${unreliableGold})`)
 			return totalGold
 		} catch (e) {
 			console.log(`Ошибка при получении золота: ${e}`)
@@ -138,12 +138,12 @@ new (class CAutoShop {
 				if (stockItemName === itemName && stock.StockCount > 0 && stockTeam === playerTeam) {
 					result.available = true
 					result.count = stock.StockCount
-					console.log(`[ДОСТУПЕН] ${itemName}: ${result.count} шт. в лавке нашей команды (${playerTeam})`)
+					// console.log(`[ДОСТУПЕН] ${itemName}: ${result.count} шт. в лавке нашей команды (${playerTeam})`)
 					return result
 				} else if (stockItemName === itemName) {
 					// Дополнительный лог для отладки
 					const teamStr = stock.Team !== playerTeam ? "вражеской" : "нашей"
-					console.log(`[ИНФОРМАЦИЯ] ${itemName}: ${stock.StockCount} шт. в лавке ${teamStr} команды (${stock.Team}), наша команда ${playerTeam}`)
+					// console.log(`[ИНФОРМАЦИЯ] ${itemName}: ${stock.StockCount} шт. в лавке ${teamStr} команды (${stock.Team}), наша команда ${playerTeam}`)
 				}
 			} catch (e) {
 				// В случае ошибки продолжаем проверку других предметов
@@ -152,7 +152,7 @@ new (class CAutoShop {
 			}
 		}
 		
-		console.log(`[НЕДОСТУПЕН] ${itemName} в лавке нашей команды (${playerTeam})`)
+		// console.log(`[НЕДОСТУПЕН] ${itemName} в лавке нашей команды (${playerTeam})`)
 		return result
 	}
 	
@@ -166,7 +166,7 @@ new (class CAutoShop {
 		const gold = this.getHeroGold()
 		const hasEnough = gold >= itemCost
 		
-		console.log(`Проверка золота: ${gold} / ${itemCost} (${hasEnough ? 'достаточно' : 'недостаточно'})`)
+		// console.log(`Проверка золота: ${gold} / ${itemCost} (${hasEnough ? 'достаточно' : 'недостаточно'})`)
 		
 		return hasEnough
 	}
@@ -181,7 +181,7 @@ new (class CAutoShop {
 		
 		// Максимальное количество предметов для быстрой покупки, с учетом золота
 		const maxAffordable = itemCost > 0 ? Math.floor(currentGold / itemCost) : count
-		console.log(`Можно купить предметов: ${maxAffordable} (золото: ${currentGold}, стоимость: ${itemCost})`)
+		// console.log(`Можно купить предметов: ${maxAffordable} (золото: ${currentGold}, стоимость: ${itemCost})`)
 		
 		const maxItems = Math.min(count, maxAffordable, 10) // Ограничиваем до 10, чтобы избежать проблем
 		
@@ -190,13 +190,13 @@ new (class CAutoShop {
 			return
 		}
 		
-		console.log(`=== БЫСТРАЯ ПОКУПКА ${item.name} (${maxItems} из ${count} шт.) ===`)
+		// console.log(`=== БЫСТРАЯ ПОКУПКА ${item.name} (${maxItems} из ${count} шт.) ===`)
 		
 		// Последовательно покупаем предметы без задержки
 		for (let i = 0; i < maxItems; i++) {
 			TaskManager.Begin(() => {
 				if (hero.IsValid) {
-					console.log(`Покупаем ${item.name} #${i + 1}, айди: ${item.id}`)
+					// console.log(`Покупаем ${item.name} #${i + 1}, айди: ${item.id}`)
 					hero.PurchaseItem(item.id, false, false)
 				}
 			})
@@ -226,7 +226,7 @@ new (class CAutoShop {
 		
 		// Получаем стоимость предмета (безопасно)
 		const itemCost = item.cost || 0
-		console.log(`Проверка для покупки ${item.name} (стоимость: ${itemCost})`)
+		// console.log(`Проверка для покупки ${item.name} (стоимость: ${itemCost})`)
 		
 		// Проверяем, достаточно ли золота для покупки
 		if (!this.hasEnoughGold(itemCost)) {
@@ -240,12 +240,12 @@ new (class CAutoShop {
 		}
 		
 		// Стандартная покупка одного предмета
-		console.log(`=== ПОКУПАЕМ ${item.name} (id: ${item.id}, стоимость: ${itemCost}) ===`)
+		// console.log(`=== ПОКУПАЕМ ${item.name} (id: ${item.id}, стоимость: ${itemCost}) ===`)
 		
 		// Используем TaskManager для надежного выполнения покупки
 		TaskManager.Begin(() => {
 			if (hero.IsValid) {
-				console.log(`Отправляем команду на покупку ${item.name} (id: ${item.id})`)
+				// console.log(`Отправляем команду на покупку ${item.name} (id: ${item.id})`)
 				hero.PurchaseItem(item.id, false, false)
 				this.sleeper.Sleep(this.PURCHASE_COOLDOWN * 1000, `buy_${item.itemName}`)
 			}
@@ -273,14 +273,14 @@ new (class CAutoShop {
 	
 	// Обработчик события начала игры
 	private GameStarted() {
-		console.log("== Игра начата ==")
+		// console.log("== Игра начата ==")
 		this.lastCheckTime = GameState.RawGameTime
 		this.sleeper.FullReset()
 	}
 	
 	// Обработчик события окончания игры
 	private GameEnded() {
-		console.log("== Игра окончена ==")
+		// console.log("== Игра окончена ==")
 		this.sleeper.FullReset()
 	}
 	
