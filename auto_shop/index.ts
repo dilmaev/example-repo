@@ -67,32 +67,46 @@ new (class CAutoShop {
 	private isItemAvailable(itemName: string): boolean {
 		// Проверка наличия GameRules
 		if (!GameRules || !GameRules.StockInfo) {
+			console.log("GameRules.StockInfo отсутствует")
+			return false
+		}
+		
+		// Получаем команду локального игрока
+		const playerTeam = LocalPlayer?.Hero?.Team
+		if (playerTeam === undefined) {
+			console.log("Не удалось определить команду игрока")
 			return false
 		}
 		
 		// Проверяем каждый элемент в StockInfo
 		for (const stock of GameRules.StockInfo) {
 			// Убедимся, что stock валидный и имеет необходимые функции
-			if (!stock || !stock.GetAbilityName) {
+			if (!stock || !stock.GetAbilityName || stock.Team === undefined) {
 				continue
 			}
 			
 			try {
 				// Получаем имя предмета в магазине
 				const stockItemName = stock.GetAbilityName()
+				const stockTeam = stock.Team
 				
-				// Проверяем, совпадает ли имя с искомым и есть ли предмет в наличии
-				if (stockItemName === itemName && stock.StockCount > 0) {
-					console.log(`[ДОСТУПЕН] ${itemName}: ${stock.StockCount} шт.`)
+				// Проверяем, совпадает ли имя с искомым, есть ли предмет в наличии и принадлежит ли он нашей команде
+				if (stockItemName === itemName && stock.StockCount > 0 && stockTeam === playerTeam) {
+					console.log(`[ДОСТУПЕН] ${itemName}: ${stock.StockCount} шт. в лавке нашей команды (${playerTeam})`)
 					return true
+				} else if (stockItemName === itemName) {
+					// Дополнительный лог для отладки
+					const teamStr = stock.Team !== playerTeam ? "вражеской" : "нашей"
+					console.log(`[ИНФОРМАЦИЯ] ${itemName}: ${stock.StockCount} шт. в лавке ${teamStr} команды (${stock.Team}), наша команда ${playerTeam}`)
 				}
 			} catch (e) {
 				// В случае ошибки продолжаем проверку других предметов
+				console.log(`Ошибка при проверке предмета: ${e}`)
 				continue
 			}
 		}
 		
-		console.log(`[НЕДОСТУПЕН] ${itemName}`)
+		console.log(`[НЕДОСТУПЕН] ${itemName} в лавке нашей команды (${playerTeam})`)
 		return false
 	}
 	
