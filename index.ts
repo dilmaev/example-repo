@@ -6,6 +6,8 @@ import {
 	DOTAGameUIState,
 	TaskManager
 } from "github.com/octarine-public/wrapper/index"
+import { AbilityData } from "../../octarine-public/wrapper/wrapper/Objects/DataBook/AbilityData"
+import { GameRules } from "../../octarine-public/wrapper/wrapper/Objects/Base/Entity"
 
 // Структура для настройки автоматической покупки предметов
 interface ItemToBuy {
@@ -39,12 +41,12 @@ const ITEMS_TO_BUY: ItemToBuy[] = [
 
 // Функция для проверки, доступен ли предмет в лавке
 function isItemAvailable(item: ItemToBuy): boolean {
-	// Если в API есть объект GameState.Shop с методом getStock, то используем его
-	if (GameState.Shop && typeof GameState.Shop.getStock === "function") {
-		return GameState.Shop.getStock(item.id) > 0
-	}
-	// Если API не предоставляет такой функции, возвращаем true по умолчанию
-	return true
+	// Проверяем наличие предмета через GameRules.StockInfo
+	return GameRules.StockInfo.some(stock => {
+		const abilityData = AbilityData.GetAbilityByName(item.itemName)
+		if (!abilityData) return false
+		return stock.AbilityID === abilityData.ID && stock.IsAvalible
+	})
 }
 
 // Функция для покупки предмета
