@@ -45,39 +45,42 @@ const itemAvailabilityCache = new Map<string, { available: boolean, lastChecked:
 // Время в секундах, в течение которого кэш считается актуальным
 const CACHE_TTL = 2
 
-// Функция для проверки, доступен ли предмет в лавке
-function isItemAvailable(item: ItemToBuy): boolean {
-	// Проверяем кэш
-	const now = GameState.RawGameTime
-	const cacheKey = item.itemName
-	const cachedValue = itemAvailabilityCache.get(cacheKey)
-	
-	// Если в кэше есть актуальное значение, используем его
-	if (cachedValue && now - cachedValue.lastChecked < CACHE_TTL) {
-		return cachedValue.available
-	}
+// Функция для создания карты предметов, доступных в магазине
+function getAvailableItemsMap(): Map<string, boolean> {
+	const availableItems = new Map<string, boolean>()
 	
 	// Проверяем, что GameRules существует
 	if (!GameRules) {
-		return false
+		return availableItems
 	}
-
-	// Получаем информацию о предмете (используем только itemName для проверки)
-	let isAvailable = false
 	
-	// Оптимизированная проверка наличия предмета в StockInfo
+	// Проходим по всем предметам в StockInfo и отмечаем доступные
 	for (const stock of GameRules.StockInfo) {
 		const stockItemName = stock.GetAbilityName()
-		if (stockItemName === item.itemName && stock.StockCount > 0) {
-			isAvailable = true
-			break
+		if (stock.StockCount > 0) {
+			availableItems.set(stockItemName, true)
 		}
 	}
 	
-	// Сохраняем результат в кэш
-	itemAvailabilityCache.set(cacheKey, { available: isAvailable, lastChecked: now })
+	return availableItems
+}
+
+// Кэш для всех доступных предметов в магазине
+let availableItemsCache: Map<string, boolean> | null = null
+let lastCacheUpdateTime = 0
+
+// Функция для проверки, доступен ли предмет в лавке
+function isItemAvailable(item: ItemToBuy): boolean {
+	const now = GameState.RawGameTime
 	
-	return isAvailable
+	// Обновляем кэш доступных предметов, если прошло больше CACHE_TTL секунд
+	if (!availableItemsCache || now - lastCacheUpdateTime >= CACHE_TTL) {
+		availableItemsCache = getAvailableItemsMap()
+		lastCacheUpdateTime = now
+	}
+	
+	// Проверяем, есть ли предмет в кэше доступных предметов
+	return availableItemsCache.has(item.itemName)
 }
 
 // Переменная для отслеживания времени последней покупки каждого предмета
@@ -125,7 +128,7 @@ function checkAndBuyItems() {
 let lastCheckTime = 0
 
 // Интервал регулярной проверки (в секундах)
-const CHECK_INTERVAL = 2 // Увеличиваем интервал проверки для снижения нагрузки
+const CHECK_INTERVAL = 0.1 // Увеличиваем интервал проверки для снижения нагрузки
 
 // Запускаем проверку при старте игры
 EventsSDK.on("GameStarted", () => {
