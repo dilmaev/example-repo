@@ -3,8 +3,8 @@ import { EventsSDK, GameState, Unit, dotaunitorder_t, ExecuteOrder } from "githu
 // ID предмета Observer Ward
 const OBSERVER_WARD_ID = 42 // ID Observer Ward
 
-// Интервал проверки и покупки вардов (в миллисекундах)
-const CHECK_INTERVAL = 60000 // Проверять каждую минуту
+// Интервал проверки и покупки вардов (в секундах)
+const CHECK_INTERVAL = 60 // Проверять каждую минуту
 
 // Минимальное количество вардов, которое нужно иметь
 const MIN_WARDS_COUNT = 2
@@ -60,17 +60,27 @@ function checkAndBuyWards() {
 	}
 }
 
+// Переменная для отслеживания времени последней проверки
+let lastCheckTime = 0
+
 // Запускаем проверку при старте игры
 EventsSDK.on("GameStarted", () => {
 	console.log("Скрипт автоматической покупки Observer Ward запущен!")
 	
-	// Запускаем первую проверку через 10 секунд после начала игры
-	setTimeout(() => {
+	// Устанавливаем начальное время проверки
+	lastCheckTime = GameState.RawGameTime
+})
+
+// Используем событие GameEvent для периодической проверки
+EventsSDK.on("GameEvent", () => {
+	// Проверяем, прошло ли достаточно времени с последней проверки
+	const currentTime = GameState.RawGameTime
+	
+	// Проверяем каждые CHECK_INTERVAL секунд
+	if (currentTime - lastCheckTime >= CHECK_INTERVAL) {
 		checkAndBuyWards()
-		
-		// Запускаем периодическую проверку
-		setInterval(checkAndBuyWards, CHECK_INTERVAL)
-	}, 10000)
+		lastCheckTime = currentTime
+	}
 })
 
 // Также проверяем при возрождении героя
