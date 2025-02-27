@@ -3,7 +3,7 @@ import { ImageData, Menu } from "github.com/octarine-public/wrapper/index"
 export class MenuManager {
 	// Основное меню
 	public readonly State: Menu.Toggle
-	public readonly CheckInterval: Menu.Slider
+	public readonly CheckIntervalSlider: Menu.Slider
 	
 	// Переключатели для предметов
 	public readonly ObserverWard: Menu.Toggle
@@ -21,12 +21,13 @@ export class MenuManager {
 		this.State = this.tree.AddToggle("Включить автопокупку")
 		
 		// Добавляем слайдер для настройки интервала проверки
-		this.CheckInterval = this.tree.AddSlider(
-			"Интервал проверки (секунд)", 
-			0.1, // минимальное значение
-			5,   // максимальное значение
-			0.1, // шаг
-			1    // значение по умолчанию
+		// Используем целые числа от 1 до 50, представляющие значения от 0.1 до 5 секунд
+		this.CheckIntervalSlider = this.tree.AddSlider(
+			"Интервал проверки (0.1 - 5 сек)", 
+			1,   // минимальное значение (0.1 секунды)
+			50,  // максимальное значение (5 секунд)
+			1,   // шаг
+			10   // значение по умолчанию (1 секунда)
 		)
 		
 		// Создаем узел для предметов
@@ -41,6 +42,12 @@ export class MenuManager {
 		this.ObserverWard.value = true
 		this.SentryWard.value = true
 		this.Smoke.value = false
+	}
+	
+	// Получаем интервал проверки в секундах (конвертируем значение слайдера)
+	public get CheckInterval(): number {
+		// Преобразуем значение слайдера (1-50) в секунды (0.1-5)
+		return this.CheckIntervalSlider.value / 10
 	}
 	
 	// Метод для проверки, включен ли конкретный предмет

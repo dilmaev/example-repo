@@ -79,11 +79,26 @@ new (class CAutoShop {
 			return availableItems
 		}
 		
+		// Выводим в консоль текущие доступные предметы для отладки
+		console.log("Проверка StockInfo:")
+		
 		// Проходим по всем предметам в StockInfo и отмечаем доступные
 		for (const stock of GameRules.StockInfo) {
 			const stockItemName = stock.GetAbilityName()
-			if (stock.StockCount > 0) {
+			const stockCount = stock.StockCount
+			
+			console.log(`Предмет ${stockItemName}: доступно ${stockCount}`)
+			
+			if (stockCount > 0) {
 				availableItems.set(stockItemName, true)
+			}
+		}
+		
+		// Выводим список предметов, которые мы хотим купить
+		for (const item of this.ITEMS_TO_BUY) {
+			if (this.menu.isItemEnabled(item.itemName)) {
+				const isAvailable = availableItems.has(item.itemName)
+				console.log(`Предмет для покупки ${item.name} (${item.itemName}): ${isAvailable ? 'доступен' : 'недоступен'}`)
 			}
 		}
 		
@@ -116,6 +131,14 @@ new (class CAutoShop {
 		if (this.sleeper.Sleeping(`buy_${item.itemName}`)) {
 			return
 		}
+		
+		// Проверяем наличие предмета в кэше доступных предметов
+		if (!this.availableItemsCache || !this.availableItemsCache.has(item.itemName)) {
+			return
+		}
+		
+		// Выводим информацию о покупке
+		console.log(`Покупаем ${item.name}`)
 		
 		// Используем TaskManager для надежного выполнения покупки
 		TaskManager.Begin(() => {
@@ -172,8 +195,8 @@ new (class CAutoShop {
 			return
 		}
 		
-		// Получаем интервал проверки из меню
-		const checkInterval = this.menu.CheckInterval.value
+		// Получаем интервал проверки из меню (через getter)
+		const checkInterval = this.menu.CheckInterval
 		
 		// Регулярная проверка каждые checkInterval секунд
 		const currentTime = GameState.RawGameTime
@@ -189,7 +212,7 @@ new (class CAutoShop {
 		if (unit === LocalPlayer?.Hero) {
 			// Устанавливаем время последней проверки немного в прошлое,
 			// чтобы проверка выполнилась при следующем тике
-			this.lastCheckTime = GameState.RawGameTime - this.menu.CheckInterval.value + 0.1
+			this.lastCheckTime = GameState.RawGameTime - this.menu.CheckInterval + 0.1
 		}
 	}
 })()
