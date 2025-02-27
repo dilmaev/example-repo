@@ -18,6 +18,7 @@ interface ItemToBuy {
 	name: string     // Имя предмета для логов
 	itemName: string // Имя предмета в инвентаре
 	dispenser?: string // Имя диспенсера, если предмет может быть в нем
+	cost?: number    // Стоимость предмета
 }
 
 // Результат проверки доступности предмета
@@ -33,18 +34,21 @@ new (class CAutoShop {
 			id: 42,
 			name: "Observer Ward",
 			itemName: "item_ward_observer",
-			dispenser: "item_ward_dispenser"
+			dispenser: "item_ward_dispenser",
+			cost: 0 // Observer Ward бесплатны
 		},
 		{
 			id: 43,
 			name: "Sentry Ward",
 			itemName: "item_ward_sentry",
-			dispenser: "item_ward_dispenser"
+			dispenser: "item_ward_dispenser",
+			cost: 50 // Стоимость Sentry Ward
 		},
 		{
 			id: 188,
 			name: "Smoke of Deceit",
-			itemName: "item_smoke_of_deceit"
+			itemName: "item_smoke_of_deceit",
+			cost: 50 // Стоимость Smoke
 		}
 		// Можно добавить другие предметы, просто добавив новые объекты в этот массив
 	]
@@ -70,6 +74,16 @@ new (class CAutoShop {
 		EventsSDK.on("Tick", this.Tick.bind(this))
 		EventsSDK.on("UnitSpawned", this.UnitSpawned.bind(this))
 		EventsSDK.on("GameEnded", this.GameEnded.bind(this))
+	}
+	
+	// Получаем текущее золото героя
+	private getHeroGold(hero: Unit): number {
+		if (!hero || !hero.IsValid) {
+			return 0
+		}
+		
+		// Получаем текущее золото
+		return hero.Gold
 	}
 	
 	// Проверяем, доступен ли предмет в магазине
@@ -125,10 +139,19 @@ new (class CAutoShop {
 	
 	// Функция для быстрой покупки нескольких одинаковых предметов
 	private bulkBuyItem(hero: Unit, item: ItemToBuy, count: number) {
-		console.log(`=== БЫСТРАЯ ПОКУПКА ${item.name} (${count} шт.) ===`)
+		// Получаем текущее золото героя
+		const currentGold = this.getHeroGold(hero)
 		
-		// Максимальное количество предметов для быстрой покупки
-		const maxItems = Math.min(count, 10) // Ограничиваем до 10, чтобы избежать проблем
+		// Максимальное количество предметов для быстрой покупки, с учетом золота
+		const maxAffordable = item.cost && item.cost > 0 ? Math.floor(currentGold / item.cost) : count
+		const maxItems = Math.min(count, maxAffordable, 10) // Ограничиваем до 10, чтобы избежать проблем
+		
+		if (maxItems <= 0) {
+			console.log(`Недостаточно золота для покупки ${item.name} (нужно ${item.cost}, есть ${currentGold})`)
+			return
+		}
+		
+		console.log(`=== БЫСТРАЯ ПОКУПКА ${item.name} (${maxItems} из ${count} шт.) ===`)
 		
 		// Последовательно покупаем предметы без задержки
 		for (let i = 0; i < maxItems; i++) {
@@ -159,6 +182,13 @@ new (class CAutoShop {
 		// Проверяем доступность предмета в магазине напрямую
 		const availability = this.checkItemAvailability(item.itemName)
 		if (!availability.available) {
+			return
+		}
+		
+		// Проверяем, достаточно ли золота для покупки
+		const currentGold = this.getHeroGold(hero)
+		if (item.cost && item.cost > 0 && currentGold < item.cost) {
+			console.log(`Недостаточно золота для покупки ${item.name} (нужно ${item.cost}, есть ${currentGold})`)
 			return
 		}
 		
