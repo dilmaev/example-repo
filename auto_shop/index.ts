@@ -7,7 +7,8 @@ import {
 	TaskManager,
 	GameRules,
 	AbilityData,
-	Sleeper
+	Sleeper,
+	PlayerCustomData
 } from "github.com/octarine-public/wrapper/index"
 
 import { MenuManager } from "./menu"
@@ -77,20 +78,30 @@ new (class CAutoShop {
 	}
 	
 	// Получаем текущее золото героя
-	private getHeroGold(hero: Unit): number {
-		if (!hero || !hero.IsValid) {
-			console.log("Герой не существует или невалиден")
+	private getHeroGold(): number {
+		if (!LocalPlayer) {
+			console.log("LocalPlayer отсутствует")
 			return 0
 		}
-		
-		// Получаем текущее золото
+
 		try {
-			const gold = hero.Gold || 0
-			console.log(`Текущее золото героя: ${gold}`)
-			return gold
+			// Получаем PlayerCustomData для локального игрока
+			const playerData = PlayerCustomData.get(LocalPlayer.PlayerID)
+			if (!playerData) {
+				console.log("PlayerCustomData отсутствует")
+				return 0
+			}
+			
+			// Суммируем надежное и ненадежное золото
+			const reliableGold = playerData.ReliableGold
+			const unreliableGold = playerData.UnreliableGold
+			const totalGold = reliableGold + unreliableGold
+			
+			console.log(`Текущее золото героя: ${totalGold} (надежное: ${reliableGold}, ненадежное: ${unreliableGold})`)
+			return totalGold
 		} catch (e) {
 			console.log(`Ошибка при получении золота: ${e}`)
-			return 9999 // Возвращаем большое число, чтобы не блокировать покупку в случае ошибки
+			return 0
 		}
 	}
 	
@@ -146,13 +157,13 @@ new (class CAutoShop {
 	}
 	
 	// Проверяем, хватает ли золота на предмет
-	private hasEnoughGold(hero: Unit, itemCost: number): boolean {
+	private hasEnoughGold(itemCost: number): boolean {
 		// Если предмет бесплатный, всегда возвращаем true
 		if (!itemCost || itemCost <= 0) {
 			return true
 		}
 		
-		const gold = this.getHeroGold(hero)
+		const gold = this.getHeroGold()
 		const hasEnough = gold >= itemCost
 		
 		console.log(`Проверка золота: ${gold} / ${itemCost} (${hasEnough ? 'достаточно' : 'недостаточно'})`)
@@ -163,7 +174,7 @@ new (class CAutoShop {
 	// Функция для быстрой покупки нескольких одинаковых предметов
 	private bulkBuyItem(hero: Unit, item: ItemToBuy, count: number) {
 		// Получаем текущее золото героя
-		const currentGold = this.getHeroGold(hero)
+		const currentGold = this.getHeroGold()
 		
 		// Безопасно проверяем стоимость предмета
 		const itemCost = item.cost || 0
@@ -218,7 +229,7 @@ new (class CAutoShop {
 		console.log(`Проверка для покупки ${item.name} (стоимость: ${itemCost})`)
 		
 		// Проверяем, достаточно ли золота для покупки
-		if (!this.hasEnoughGold(hero, itemCost)) {
+		if (!this.hasEnoughGold(itemCost)) {
 			return
 		}
 		
