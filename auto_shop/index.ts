@@ -20,6 +20,12 @@ interface ItemToBuy {
 	dispenser?: string // Имя диспенсера, если предмет может быть в нем
 }
 
+// Результат проверки доступности предмета
+interface ItemAvailabilityResult {
+	available: boolean // Доступен ли предмет
+	count: number      // Количество доступных предметов
+}
+
 new (class CAutoShop {
 	// Массив предметов для автоматической покупки
 	private readonly ITEMS_TO_BUY: ItemToBuy[] = [
@@ -46,6 +52,9 @@ new (class CAutoShop {
 	// Минимальный интервал между покупками одного и того же предмета (в секундах)
 	private readonly PURCHASE_COOLDOWN = 1
 	
+	// Количество предметов, при котором включается режим "агрессивной" покупки
+	private readonly FAST_PURCHASE_THRESHOLD = 3
+	
 	// Переменная для отслеживания времени последней проверки
 	private lastCheckTime = 0
 	
@@ -64,18 +73,20 @@ new (class CAutoShop {
 	}
 	
 	// Проверяем, доступен ли предмет в магазине
-	private isItemAvailable(itemName: string): boolean {
+	private checkItemAvailability(itemName: string): ItemAvailabilityResult {
+		const result: ItemAvailabilityResult = { available: false, count: 0 }
+		
 		// Проверка наличия GameRules
 		if (!GameRules || !GameRules.StockInfo) {
 			console.log("GameRules.StockInfo отсутствует")
-			return false
+			return result
 		}
 		
 		// Получаем команду локального игрока
 		const playerTeam = LocalPlayer?.Hero?.Team
 		if (playerTeam === undefined) {
 			console.log("Не удалось определить команду игрока")
-			return false
+			return result
 		}
 		
 		// Проверяем каждый элемент в StockInfo
@@ -92,8 +103,10 @@ new (class CAutoShop {
 				
 				// Проверяем, совпадает ли имя с искомым, есть ли предмет в наличии и принадлежит ли он нашей команде
 				if (stockItemName === itemName && stock.StockCount > 0 && stockTeam === playerTeam) {
-					console.log(`[ДОСТУПЕН] ${itemName}: ${stock.StockCount} шт. в лавке нашей команды (${playerTeam})`)
-					return true
+					result.available = true
+					result.count = stock.StockCount
+					console.log(`[ДОСТУПЕН] ${itemName}: ${result.count} шт. в лавке нашей команды (${playerTeam})`)
+					return result
 				} else if (stockItemName === itemName) {
 					// Дополнительный лог для отладки
 					const teamStr = stock.Team !== playerTeam ? "вражеской" : "нашей"
@@ -107,7 +120,28 @@ new (class CAutoShop {
 		}
 		
 		console.log(`[НЕДОСТУПЕН] ${itemName} в лавке нашей команды (${playerTeam})`)
-		return false
+		return result
+	}
+	
+	// Функция для быстрой покупки нескольких одинаковых предметов
+	private bulkBuyItem(hero: Unit, item: ItemToBuy, count: number) {
+		console.log(`=== БЫСТРАЯ ПОКУПКА ${item.name} (${count} шт.) ===`)
+		
+		// Максимальное количество предметов для быстрой покупки
+		const maxItems = Math.min(count, 10) // Ограничиваем до 10, чтобы избежать проблем
+		
+		// Последовательно покупаем предметы без задержки
+		for (let i = 0; i < maxItems; i++) {
+			TaskManager.Begin(() => {
+				if (hero.IsValid) {
+					hero.PurchaseItem(item.id, false, false)
+					console.log(`Куплен ${item.name} (${i + 1}/${maxItems})`)
+				}
+			})
+		}
+		
+		// После массовой покупки устанавливаем слипер
+		this.sleeper.Sleep(this.PURCHASE_COOLDOWN * 1000, `buy_${item.itemName}`)
 	}
 	
 	// Функция для покупки предмета
@@ -123,10 +157,18 @@ new (class CAutoShop {
 		}
 		
 		// Проверяем доступность предмета в магазине напрямую
-		if (!this.isItemAvailable(item.itemName)) {
+		const availability = this.checkItemAvailability(item.itemName)
+		if (!availability.available) {
 			return
 		}
 		
+		// Если предметов много, используем массовую покупку
+		if (availability.count >= this.FAST_PURCHASE_THRESHOLD) {
+			this.bulkBuyItem(hero, item, availability.count)
+			return
+		}
+		
+		// Стандартная покупка одного предмета
 		console.log(`=== ПОКУПАЕМ ${item.name} ===`)
 		
 		// Используем TaskManager для надежного выполнения покупки
