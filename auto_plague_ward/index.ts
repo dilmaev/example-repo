@@ -73,7 +73,7 @@ new (class AutoPlaceWard {
 	
 	// Функция в которой можно будет включать и выключать логи одной кнопкой
 	private log(...args: any[]) {
-		var enabled = true // Временно включаем логи для отладки
+		var enabled = false // Временно включаем логи для отладки
 		if (enabled) {
 			console.log(...args)
 		}
