@@ -10,8 +10,7 @@ import {
 	Sleeper,
 	Menu,
 	Vector3,
-	ImageData,
-	Log
+	ImageData
 } from "github.com/octarine-public/wrapper/index"
 
 class MenuManager {
@@ -49,7 +48,7 @@ new (class AutoPlaceWard {
 		EventsSDK.on("Tick", this.Tick.bind(this))
 		EventsSDK.on("GameEnded", this.GameEnded.bind(this))
 		
-		Log.Info("AutoPlaceWard: Скрипт загружен")
+		console.log("AutoPlaceWard: Скрипт загружен")
 	}
 	
 	// Проверяем, играет ли игрок за Веномансера
@@ -62,7 +61,7 @@ new (class AutoPlaceWard {
 		// Проверяем имя героя
 		const isVeno = hero.Name === "npc_dota_hero_venomancer"
 		if (isVeno) {
-			Log.Info(`Герой: ${hero.Name}, это Веномансер`)
+			console.log(`Герой: ${hero.Name}, это Веномансер`)
 		}
 		return isVeno
 	}
@@ -71,22 +70,22 @@ new (class AutoPlaceWard {
 	private findPlaguaWardAbility(): any | undefined {
 		const hero = LocalPlayer?.Hero
 		if (!hero || !hero.IsValid) {
-			Log.Info("Герой недоступен")
+			console.log("Герой недоступен")
 			return undefined
 		}
 		
 		// Выводим список всех способностей героя
-		Log.Info(`Список способностей (всего ${hero.Abilities.length}):`)
+		console.log(`Список способностей (всего ${hero.Abilities.length}):`)
 		for (const ability of hero.Abilities) {
 			if (ability) {
-				Log.Info(`Способность: ${ability.Name}, уровень: ${ability.Level}`)
+				console.log(`Способность: ${ability.Name}, уровень: ${ability.Level}`)
 			}
 		}
 		
 		// Ищем способность в списке способностей героя
 		for (const ability of hero.Abilities) {
 			if (ability && ability.Name === this.ABILITY_NAME) {
-				Log.Info(`Найдена способность ${this.ABILITY_NAME}`)
+				console.log(`Найдена способность ${this.ABILITY_NAME}`)
 				return ability
 			}
 		}
@@ -94,31 +93,31 @@ new (class AutoPlaceWard {
 		// Если не найдена, попробуем найти по подстроке
 		for (const ability of hero.Abilities) {
 			if (ability && ability.Name.includes("plague_ward")) {
-				Log.Info(`Найдена способность по подстроке: ${ability.Name}`)
+				console.log(`Найдена способность по подстроке: ${ability.Name}`)
 				return ability
 			}
 		}
 		
-		Log.Info(`Способность ${this.ABILITY_NAME} не найдена`)
+		console.log(`Способность ${this.ABILITY_NAME} не найдена`)
 		return undefined
 	}
 	
 	// Проверяем, можно ли использовать способность
 	private canUseAbility(ability: any): boolean {
 		if (!ability || ability.Level <= 0) {
-			Log.Info("Способность не найдена или не изучена")
+			console.log("Способность не найдена или не изучена")
 			return false
 		}
 		
 		// Проверяем детальную информацию о способности
-		Log.Info(`Способность: ${ability.Name}`)
-		Log.Info(`IsReady: ${ability.IsReady}, IsCasting: ${ability.IsCasting}`)
-		Log.Info(`Уровень: ${ability.Level}, Кулдаун: ${ability.CooldownTimeRemaining}`)
-		Log.Info(`Мана героя: ${LocalPlayer?.Hero?.Mana}, Требуется маны: ${ability.ManaCost}`)
+		console.log(`Способность: ${ability.Name}`)
+		console.log(`IsReady: ${ability.IsReady}, IsCasting: ${ability.IsCasting}`)
+		console.log(`Уровень: ${ability.Level}, Кулдаун: ${ability.CooldownTimeRemaining}`)
+		console.log(`Мана героя: ${LocalPlayer?.Hero?.Mana}, Требуется маны: ${ability.ManaCost}`)
 		
 		// Спит ли слипер
 		const isSleeping = this.sleeper.Sleeping("cast_ward")
-		Log.Info(`Слипер активен: ${isSleeping}`)
+		console.log(`Слипер активен: ${isSleeping}`)
 		
 		// Проверяем, что способность не в кулдауне, есть мана и герой может кастовать
 		return ability.IsReady && !ability.IsCasting && !isSleeping
@@ -128,55 +127,59 @@ new (class AutoPlaceWard {
 	private castPlaguaWard(): void {
 		const hero = LocalPlayer?.Hero
 		if (!hero || !hero.IsValid) {
-			Log.Info("Герой недоступен для каста")
+			console.log("Герой недоступен для каста")
 			return
 		}
 		
 		const ability = this.findPlaguaWardAbility()
 		
 		if (!ability) {
-			Log.Info("Способность не найдена для каста")
+			console.log("Способность не найдена для каста")
 			return
 		}
 		
 		if (!this.canUseAbility(ability)) {
-			Log.Info("Способность не готова к использованию")
+			console.log("Способность не готова к использованию")
 			return
 		}
 		
 		// Получаем позицию героя
 		const heroPosition = hero.Position
 		if (!heroPosition) {
-			Log.Info("Позиция героя недоступна")
+			console.log("Позиция героя недоступна")
 			return
 		}
 		
-		Log.Info(`Пробую кастовать варда на позицию: ${heroPosition.x}, ${heroPosition.y}, ${heroPosition.z}`)
+		console.log(`Пробую кастовать варда на позицию: ${heroPosition.x}, ${heroPosition.y}, ${heroPosition.z}`)
 		
 		// Выполняем каст способности на своей позиции
 		try {
-			// Используем способность на свою позицию
-			ability.UseAbilityPosition(heroPosition.Clone())
+			// Используем TaskManager для надежного выполнения способности
+			TaskManager.Begin(() => {
+				// Используем способность на свою позицию
+				// Вызываем метод способности UseAbility с позицией героя
+				ability.UseAbility(heroPosition.Clone())
+				
+				// Устанавливаем слипер, чтобы не спамить попытками использования
+				this.sleeper.Sleep(0.5 * 1000, "cast_ward")
+			})
 			
-			// Устанавливаем слипер, чтобы не спамить попытками использования
-			this.sleeper.Sleep(0.5 * 1000, "cast_ward")
-			
-			Log.Info("Попытка каста выполнена успешно")
+			console.log("Попытка каста выполнена успешно")
 		} catch (error) {
-			Log.Info(`Ошибка при касте: ${error}`)
+			console.log(`Ошибка при касте: ${error}`)
 		}
 	}
 	
 	// Обработчик события начала игры
 	private GameStarted() {
-		Log.Info("AutoPlaceWard: Игра началась")
+		console.log("AutoPlaceWard: Игра началась")
 		this.lastCheckTime = GameState.RawGameTime
 		this.sleeper.FullReset()
 	}
 	
 	// Обработчик события окончания игры
 	private GameEnded() {
-		Log.Info("AutoPlaceWard: Игра закончилась")
+		console.log("AutoPlaceWard: Игра закончилась")
 		this.sleeper.FullReset()
 	}
 	
