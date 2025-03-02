@@ -82,7 +82,15 @@ new (class AutoPlaceWard {
 		// Подписываемся на события приказов игрока
 		EventsSDK.on("ExecuteOrder", this.OnPlayerOrder.bind(this))
 		
-		console.log("AutoPlaceWard: Скрипт загружен")
+		this.log("AutoPlaceWard: Скрипт загружен")
+	}
+
+	// функция в которой можно будет включать и выключать логи одной кнопкой
+	private log(...args: any[]) {
+		var enabled = false
+		if (enabled) {
+			console.log(...args)
+		}
 	}
 	
 	// Обработчик события исполнения приказа игрока
@@ -126,7 +134,7 @@ new (class AutoPlaceWard {
 		this.lastOrderQueue = order.Queue
 		this.lastOrderTime = GameState.RawGameTime
 		
-		console.log(`Сохранен приказ: ${this.lastOrderType}`)
+		this.log(`Сохранен приказ: ${this.lastOrderType}`)
 	}
 	
 	// Выполнение последнего приказа игрока
@@ -138,26 +146,26 @@ new (class AutoPlaceWard {
 		
 		// Проверяем, включена ли опция в меню
 		if (!this.menu.ResumeLastOrder.value) {
-			console.log("Восстановление последнего приказа отключено в меню")
+			this.log("Восстановление последнего приказа отключено в меню")
 			return
 		}
 		
 		// Проверяем актуальность приказа
 		const orderAge = GameState.RawGameTime - this.lastOrderTime
 		if (orderAge > this.MAX_ORDER_AGE) {
-			console.log(`Приказ слишком старый (${orderAge.toFixed(2)} сек.), не восстанавливаем`)
+			this.log(`Приказ слишком старый (${orderAge.toFixed(2)} сек.), не восстанавливаем`)
 			return
 		}
 		
 		// Проверяем актуальность цели (если это юнит/объект)
 		if (this.lastOrderTarget instanceof Entity) {
 			if (!this.lastOrderTarget.IsValid || !this.lastOrderTarget.IsAlive || !this.lastOrderTarget.IsVisible) {
-				console.log(`Цель приказа (${this.lastOrderTarget.Name}) недействительна, мертва или невидима`)
+				this.log(`Цель приказа (${this.lastOrderTarget.Name}) недействительна, мертва или невидима`)
 				return
 			}
 		}
 		
-		console.log(`Восстанавливаем последний приказ: ${this.lastOrderType}, возраст: ${orderAge.toFixed(2)} сек.`)
+		this.log(`Восстанавливаем последний приказ: ${this.lastOrderType}, возраст: ${orderAge.toFixed(2)} сек.`)
 		
 		// Восстанавливаем приказ в зависимости от его типа
 		switch (this.lastOrderType) {
@@ -166,10 +174,10 @@ new (class AutoPlaceWard {
 				if (this.lastOrderPosition) {
 					if (this.lastOrderType === dotaunitorder_t.DOTA_UNIT_ORDER_MOVE_TO_POSITION) {
 						hero.MoveTo(this.lastOrderPosition, this.lastOrderQueue)
-						console.log(`Восстановлен приказ движения на позицию: ${this.lastOrderPosition.toString()}`)
+						this.log(`Восстановлен приказ движения на позицию: ${this.lastOrderPosition.toString()}`)
 					} else {
 						hero.AttackMove(this.lastOrderPosition, this.lastOrderQueue)
-						console.log(`Восстановлен приказ атаки движением на позицию: ${this.lastOrderPosition.toString()}`)
+						this.log(`Восстановлен приказ атаки движением на позицию: ${this.lastOrderPosition.toString()}`)
 					}
 				}
 				break
@@ -177,19 +185,19 @@ new (class AutoPlaceWard {
 			case dotaunitorder_t.DOTA_UNIT_ORDER_ATTACK_TARGET:
 				if (this.lastOrderTarget instanceof Entity) {
 					hero.AttackTarget(this.lastOrderTarget, this.lastOrderQueue)
-					console.log(`Восстановлен приказ атаки цели: ${this.lastOrderTarget.Name}`)
+					this.log(`Восстановлен приказ атаки цели: ${this.lastOrderTarget.Name}`)
 				}
 				break
 			
 			case dotaunitorder_t.DOTA_UNIT_ORDER_MOVE_TO_TARGET:
 				if (this.lastOrderTarget instanceof Entity) {
 					hero.MoveToTarget(this.lastOrderTarget, this.lastOrderQueue)
-					console.log(`Восстановлен приказ движения к цели: ${this.lastOrderTarget.Name}`)
+					this.log(`Восстановлен приказ движения к цели: ${this.lastOrderTarget.Name}`)
 				}
 				break
 				
 			default:
-				console.log(`Приказ типа ${this.lastOrderType} не поддерживается для восстановления`)
+				this.log(`Приказ типа ${this.lastOrderType} не поддерживается для восстановления`)
 				break
 		}
 	}
@@ -204,7 +212,7 @@ new (class AutoPlaceWard {
 		// Проверяем имя героя
 		const isVeno = hero.Name === "npc_dota_hero_venomancer"
 		if (isVeno) {
-			console.log(`Герой: ${hero.Name}, это Веномансер`)
+			this.log(`Герой: ${hero.Name}, это Веномансер`)
 		}
 		return isVeno
 	}
@@ -213,7 +221,7 @@ new (class AutoPlaceWard {
 	private findPlaguaWardAbility(): any | undefined {
 		const hero = LocalPlayer?.Hero
 		if (!hero || !hero.IsValid) {
-			console.log("Герой недоступен")
+			this.log("Герой недоступен")
 			return undefined
 		}
 		
@@ -221,33 +229,33 @@ new (class AutoPlaceWard {
 			// Используем правильный метод GetAbilityByName из API
 			const ability = hero.GetAbilityByName(this.ABILITY_NAME)
 			if (ability) {
-				console.log(`Найдена способность ${this.ABILITY_NAME}`)
+				this.log(`Найдена способность ${this.ABILITY_NAME}`)
 				return ability
 			}
 			
 			// Если не найдена, ищем по регулярному выражению
 			const regexAbility = hero.GetAbilityByName(/plague_ward/)
 			if (regexAbility) {
-				console.log(`Найдена способность по регулярному выражению: ${regexAbility.Name}`)
+				this.log(`Найдена способность по регулярному выражению: ${regexAbility.Name}`)
 				return regexAbility
 			}
 			
 			// Для отладки выведем все способности героя
-			console.log("Список всех способностей героя:")
+			this.log("Список всех способностей героя:")
 			if (hero.Spells) {
 				for (const spell of hero.Spells) {
 					if (spell) {
-						console.log(`- ${spell.Name}, уровень: ${spell.Level}`)
+						this.log(`- ${spell.Name}, уровень: ${spell.Level}`)
 					}
 				}
 			} else {
-				console.log("hero.Spells не определено")
+				this.log("hero.Spells не определено")
 			}
 			
-			console.log(`Способность ${this.ABILITY_NAME} не найдена`)
+			this.log(`Способность ${this.ABILITY_NAME} не найдена`)
 			return undefined
 		} catch (error) {
-			console.log(`Ошибка при поиске способности: ${error}`)
+			this.log(`Ошибка при поиске способности: ${error}`)
 			return undefined
 		}
 	}
@@ -255,49 +263,49 @@ new (class AutoPlaceWard {
 	// Проверяем, можно ли использовать способность
 	private canUseAbility(ability: any): boolean {
 		if (!ability) {
-			console.log("Способность не определена")
+			this.log("Способность не определена")
 			return false
 		}
 		
 		if (ability.Level <= 0) {
-			console.log("Способность не изучена")
+			this.log("Способность не изучена")
 			return false
 		}
 		
 		// Проверяем детальную информацию о способности
-		console.log(`Способность: ${ability.Name}`)
-		console.log(`IsReady: ${ability.IsReady}, IsCasting: ${ability.IsCasting || false}`)
-		console.log(`Уровень: ${ability.Level}, Кулдаун: ${ability.CooldownTimeRemaining || 0}`)
+		this.log(`Способность: ${ability.Name}`)
+		this.log(`IsReady: ${ability.IsReady}, IsCasting: ${ability.IsCasting || false}`)
+		this.log(`Уровень: ${ability.Level}, Кулдаун: ${ability.CooldownTimeRemaining || 0}`)
 		
 		// Безопасная проверка маны
 		const hero = LocalPlayer?.Hero
 		const heroMana = hero ? hero.Mana : 0
 		const manaCost = ability.ManaCost || 0
-		console.log(`Мана героя: ${heroMana}, Требуется маны: ${manaCost}`)
+		this.log(`Мана героя: ${heroMana}, Требуется маны: ${manaCost}`)
 		
 		// Проверяем невидимость героя
 		const isInvisible = hero ? hero.IsInvisible : false
-		console.log(`Герой невидим: ${isInvisible}`)
+		this.log(`Герой невидим: ${isInvisible}`)
 		
 		// Если герой невидим, не используем способность
 		if (isInvisible) {
-			console.log("Герой невидим, пропускаем использование способности")
+			this.log("Герой невидим, пропускаем использование способности")
 			return false
 		}
 		
 		// Спит ли слипер
 		const isSleeping = this.sleeper.Sleeping("cast_ward")
-		console.log(`Слипер активен: ${isSleeping}`)
+		this.log(`Слипер активен: ${isSleeping}`)
 		
 		// Проверяем время с последнего успешного использования
 		const timeSinceLastCast = GameState.RawGameTime - this.lastCastTime
-		console.log(`Время с последнего использования: ${timeSinceLastCast.toFixed(2)} сек.`)
+		this.log(`Время с последнего использования: ${timeSinceLastCast.toFixed(2)} сек.`)
 		
 		// Дополнительная проверка на кулдаун для надежности
 		const isOnCooldown = ability.CooldownTimeRemaining > 0 || !ability.IsReady || timeSinceLastCast < this.CAST_COOLDOWN
 		
 		if (isOnCooldown) {
-			console.log(`Способность еще в кулдауне или недавно использовалась (${timeSinceLastCast.toFixed(2)} < ${this.CAST_COOLDOWN} сек.)`)
+			this.log(`Способность еще в кулдауне или недавно использовалась (${timeSinceLastCast.toFixed(2)} < ${this.CAST_COOLDOWN} сек.)`)
 			return false
 		}
 		
@@ -311,19 +319,19 @@ new (class AutoPlaceWard {
 		try {
 			const hero = LocalPlayer?.Hero
 			if (!hero || !hero.IsValid) {
-				console.log("Герой недоступен для каста")
+				this.log("Герой недоступен для каста")
 				return
 			}
 			
 			const ability = this.findPlaguaWardAbility()
 			
 			if (!ability) {
-				console.log("Способность не найдена для каста")
+				this.log("Способность не найдена для каста")
 				return
 			}
 			
 			if (!this.canUseAbility(ability)) {
-				console.log("Способность не готова к использованию")
+				this.log("Способность не готова к использованию")
 				return
 			}
 			
@@ -331,18 +339,18 @@ new (class AutoPlaceWard {
 			TaskManager.Begin(() => {
 				// Проверяем еще раз перед выполнением
 				if (!hero.IsValid || !ability) {
-					console.log("Условия изменились, отменяем каст")
+					this.log("Условия изменились, отменяем каст")
 					return
 				}
 				
 				// Дополнительная проверка готовности
 				if (!ability.IsReady || ability.CooldownTimeRemaining > 0) {
-					console.log("Способность внезапно оказалась не готова, отменяем каст")
+					this.log("Способность внезапно оказалась не готова, отменяем каст")
 					return
 				}
 				
 				// Определяем тип способности и используем соответствующий метод каста
-				console.log("Кастуем ward на героя")
+				this.log("Кастуем ward на героя")
 				
 				// Используем CastTarget для кастования на самого героя
 				hero.CastTarget(ability, hero)
@@ -353,23 +361,29 @@ new (class AutoPlaceWard {
 				// Обновляем время последнего каста
 				this.lastCastTime = GameState.RawGameTime
 				
-				console.log("Команда на каст отправлена")
+				this.log("Команда на каст отправлена")
 				
 				// Восстанавливаем последний приказ игрока через небольшую задержку
-				TaskManager.InTick(10, () => {
+				// TaskManager.InTick(10, () => {
+				// 	this.resumeLastOrder()
+				// })
+				
+				// Используем TaskManager.Begin для создания задержки перед восстановлением приказа
+				// 300 мс должно быть достаточно для завершения анимации каста
+				TaskManager.Begin(() => {
 					this.resumeLastOrder()
-				})
+				}, 300)
 			})
 			
-			console.log("Попытка каста выполнена успешно")
+			this.log("Попытка каста выполнена успешно")
 		} catch (error) {
-			console.log(`Ошибка при касте: ${error}`)
+			this.log(`Ошибка при касте: ${error}`)
 		}
 	}
 	
 	// Обработчик события начала игры
 	private GameStarted() {
-		console.log("AutoPlaceWard: Игра началась")
+		this.log("AutoPlaceWard: Игра началась")
 		this.lastCheckTime = GameState.RawGameTime
 		this.lastCastTime = GameState.RawGameTime - this.CAST_COOLDOWN // Позволяем сразу использовать способность
 		this.sleeper.FullReset()
@@ -377,7 +391,7 @@ new (class AutoPlaceWard {
 	
 	// Обработчик события окончания игры
 	private GameEnded() {
-		console.log("AutoPlaceWard: Игра закончилась")
+		this.log("AutoPlaceWard: Игра закончилась")
 		this.sleeper.FullReset()
 	}
 	
@@ -406,7 +420,7 @@ new (class AutoPlaceWard {
 				this.lastCheckTime = currentTime
 			}
 		} catch (error) {
-			console.log(`Ошибка в методе Tick: ${error}`)
+			this.log(`Ошибка в методе Tick: ${error}`)
 		}
 	}
 })() 
