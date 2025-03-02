@@ -66,7 +66,7 @@ new (class AutoPlaceWard {
 		return isVeno
 	}
 	
-	// Находим способность Plague Ward у героя
+	// Находим способность Plague Ward у героя по названию
 	private findPlaguaWardAbility(): any | undefined {
 		const hero = LocalPlayer?.Hero
 		if (!hero || !hero.IsValid) {
@@ -74,55 +74,39 @@ new (class AutoPlaceWard {
 			return undefined
 		}
 		
-		// Проверяем, что Abilities существует
-		if (!hero.Abilities) {
-			console.log("hero.Abilities не определено")
-			return undefined
-		}
-		
-		// Выводим список всех способностей героя
-		console.log(`Список способностей (всего ${hero.Abilities.length || 0}):`)
-		
-		// Проверяем, что массив способностей не пустой
-		if (!hero.Abilities.length) {
-			console.log("Массив способностей пуст")
-			return undefined
-		}
-		
-		// Перебираем все способности героя с дополнительной проверкой
-		for (let i = 0; i < hero.Abilities.length; i++) {
-			const ability = hero.Abilities[i]
+		try {
+			// Используем правильный метод GetAbilityByName из API
+			const ability = hero.GetAbilityByName(this.ABILITY_NAME)
 			if (ability) {
-				console.log(`Способность [${i}]: ${ability.Name}, уровень: ${ability.Level || 0}`)
-			}
-		}
-		
-		// Ищем способность в списке способностей героя
-		for (const ability of hero.Abilities) {
-			if (ability && ability.Name === this.ABILITY_NAME) {
 				console.log(`Найдена способность ${this.ABILITY_NAME}`)
 				return ability
 			}
-		}
-		
-		// Если не найдена, попробуем найти по подстроке
-		for (const ability of hero.Abilities) {
-			if (ability && ability.Name && ability.Name.includes("plague_ward")) {
-				console.log(`Найдена способность по подстроке: ${ability.Name}`)
-				return ability
+			
+			// Если не найдена, ищем по регулярному выражению
+			const regexAbility = hero.GetAbilityByName(/plague_ward/)
+			if (regexAbility) {
+				console.log(`Найдена способность по регулярному выражению: ${regexAbility.Name}`)
+				return regexAbility
 			}
-		}
-		
-		// Последняя попытка - ищем любую способность с "ward" в названии
-		for (const ability of hero.Abilities) {
-			if (ability && ability.Name && ability.Name.includes("ward")) {
-				console.log(`Найдена способность с "ward" в названии: ${ability.Name}`)
-				return ability
+			
+			// Для отладки выведем все способности героя
+			console.log("Список всех способностей героя:")
+			if (hero.Spells) {
+				for (const spell of hero.Spells) {
+					if (spell) {
+						console.log(`- ${spell.Name}, уровень: ${spell.Level}`)
+					}
+				}
+			} else {
+				console.log("hero.Spells не определено")
 			}
+			
+			console.log(`Способность ${this.ABILITY_NAME} не найдена`)
+			return undefined
+		} catch (error) {
+			console.log(`Ошибка при поиске способности: ${error}`)
+			return undefined
 		}
-		
-		console.log(`Способность ${this.ABILITY_NAME} не найдена`)
-		return undefined
 	}
 	
 	// Проверяем, можно ли использовать способность
@@ -156,60 +140,40 @@ new (class AutoPlaceWard {
 		return ability.IsReady && !(ability.IsCasting || false) && !isSleeping
 	}
 	
-	// Использование способности на свою позицию
+	// Использование способности на самого себя (героя)
 	private castPlaguaWard(): void {
-		const hero = LocalPlayer?.Hero
-		if (!hero || !hero.IsValid) {
-			console.log("Герой недоступен для каста")
-			return
-		}
-		
-		// Получаем способность и проверяем вручную, без использования findPlaguaWardAbility
 		try {
-			console.log("Пробуем получить список способностей напрямую")
-			if (!hero.Abilities) {
-				console.log("hero.Abilities не определено при прямом доступе")
+			const hero = LocalPlayer?.Hero
+			if (!hero || !hero.IsValid) {
+				console.log("Герой недоступен для каста")
 				return
 			}
 			
-			console.log(`Прямой доступ: Abilities.length = ${hero.Abilities.length || 0}`)
-		} catch (err) {
-			console.log(`Ошибка при прямом доступе к способностям: ${err}`)
-		}
-		
-		const ability = this.findPlaguaWardAbility()
-		
-		if (!ability) {
-			console.log("Способность не найдена для каста")
-			return
-		}
-		
-		if (!this.canUseAbility(ability)) {
-			console.log("Способность не готова к использованию")
-			return
-		}
-		
-		// Получаем позицию героя
-		const heroPosition = hero.Position
-		if (!heroPosition) {
-			console.log("Позиция героя недоступна")
-			return
-		}
-		
-		console.log(`Пробую кастовать варда на позицию: ${heroPosition.x}, ${heroPosition.y}, ${heroPosition.z}`)
-		
-		// Выполняем каст способности на своей позиции
-		try {
+			const ability = this.findPlaguaWardAbility()
+			
+			if (!ability) {
+				console.log("Способность не найдена для каста")
+				return
+			}
+			
+			if (!this.canUseAbility(ability)) {
+				console.log("Способность не готова к использованию")
+				return
+			}
+			
 			// Используем TaskManager для надежного выполнения способности
 			TaskManager.Begin(() => {
 				// Проверяем еще раз перед выполнением
-				if (!hero.IsValid || !ability || !heroPosition) {
+				if (!hero.IsValid || !ability) {
 					console.log("Условия изменились, отменяем каст")
 					return
 				}
 				
-				// Используем правильный метод для кастования на позицию - hero.CastPosition
-				hero.CastPosition(ability, heroPosition.Clone())
+				// Определяем тип способности и используем соответствующий метод каста
+				console.log("Кастуем ward на героя")
+				
+				// Используем CastTarget для кастования на самого героя
+				hero.CastTarget(ability, hero)
 				
 				// Устанавливаем слипер, чтобы не спамить попытками использования
 				this.sleeper.Sleep(0.5 * 1000, "cast_ward")
@@ -238,22 +202,22 @@ new (class AutoPlaceWard {
 	
 	// Обработчик тика игры
 	private Tick() {
-		// Проверяем, находимся ли мы в игре
-		if (GameState.UIState !== DOTAGameUIState.DOTA_GAME_UI_DOTA_INGAME) {
-			return
-		}
-		
-		// Если скрипт выключен в меню, прекращаем выполнение
-		if (!this.menu.State.value) {
-			return
-		}
-		
-		// Если игрок не играет за Веномансера, выходим
-		if (!this.isPlayingVenomancer()) {
-			return
-		}
-		
 		try {
+			// Проверяем, находимся ли мы в игре
+			if (GameState.UIState !== DOTAGameUIState.DOTA_GAME_UI_DOTA_INGAME) {
+				return
+			}
+			
+			// Если скрипт выключен в меню, прекращаем выполнение
+			if (!this.menu.State.value) {
+				return
+			}
+			
+			// Если игрок не играет за Веномансера, выходим
+			if (!this.isPlayingVenomancer()) {
+				return
+			}
+			
 			// Регулярная проверка каждые COOLDOWN_CHECK_INTERVAL секунд
 			const currentTime = GameState.RawGameTime
 			if (currentTime - this.lastCheckTime >= this.COOLDOWN_CHECK_INTERVAL) {
