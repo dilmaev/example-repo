@@ -48,7 +48,7 @@ new (class AutoPlaceWard {
 	// Постоянные значения для скрипта
 	private readonly ABILITY_NAME = "venomancer_plague_ward"
 	private readonly COOLDOWN_CHECK_INTERVAL = 0.5 // Интервал проверки в секундах
-	private readonly CAST_COOLDOWN = 1.0 // Минимальное время между кастами в секундах
+	private readonly CAST_COOLDOWN = 0.5 // Минимальное время между кастами в секундах
 	
 	// Переменная для отслеживания времени последней проверки
 	private lastCheckTime = 0
