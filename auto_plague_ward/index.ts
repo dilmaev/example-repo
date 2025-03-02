@@ -1,3 +1,13 @@
+/*
+ * Автоматическое использование способности Plague Ward для Веномансера
+ * Возможности:
+ * - Автоматически применяет способность Plague Ward, когда она готова
+ * - Проверяет наличие достаточного количества маны
+ * - НЕ использует способность, если герой находится в состоянии невидимости
+ * - Соблюдает минимальный интервал между применениями способности
+ * - Можно включить/выключить в меню
+ */
+
 import {
 	EventsSDK,
 	GameState,
@@ -135,6 +145,16 @@ new (class AutoPlaceWard {
 		const heroMana = hero ? hero.Mana : 0
 		const manaCost = ability.ManaCost || 0
 		console.log(`Мана героя: ${heroMana}, Требуется маны: ${manaCost}`)
+		
+		// Проверяем невидимость героя
+		const isInvisible = hero ? hero.IsInvisible : false
+		console.log(`Герой невидим: ${isInvisible}`)
+		
+		// Если герой невидим, не используем способность
+		if (isInvisible) {
+			console.log("Герой невидим, пропускаем использование способности")
+			return false
+		}
 		
 		// Спит ли слипер
 		const isSleeping = this.sleeper.Sleeping("cast_ward")
