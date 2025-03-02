@@ -6,6 +6,7 @@
  * - НЕ использует способность, если герой находится в состоянии невидимости
  * - Соблюдает минимальный интервал между применениями способности
  * - Можно включить/выключить в меню
+ * - Продолжает выполнять последний приказ игрока после размещения варда
  */
 
 import {
@@ -20,11 +21,15 @@ import {
 	Sleeper,
 	Menu,
 	Vector3,
-	ImageData
+	ImageData,
+	ExecuteOrder,
+	dotaunitorder_t,
+	Entity
 } from "github.com/octarine-public/wrapper/index"
 
 class MenuManager {
 	public readonly State: Menu.Toggle
+	public readonly ResumeLastOrder: Menu.Toggle
 	
 	private readonly baseNode = Menu.AddEntry("Utility")
 	private readonly tree: Menu.Node
@@ -35,6 +40,9 @@ class MenuManager {
 		
 		// Добавляем основной переключатель для включения/выключения скрипта
 		this.State = this.tree.AddToggle("Включить автоварды", true)
+		
+		// Добавляем переключатель для продолжения последнего приказа
+		this.ResumeLastOrder = this.tree.AddToggle("Продолжать последний приказ", true)
 	}
 }
 
@@ -43,6 +51,7 @@ new (class AutoPlaceWard {
 	private readonly ABILITY_NAME = "venomancer_plague_ward"
 	private readonly COOLDOWN_CHECK_INTERVAL = 0.5 // Увеличиваем интервал проверки до 0.5 секунды
 	private readonly CAST_COOLDOWN = 1.0 // Минимальное время между кастами в секундах
+	private readonly MAX_ORDER_AGE = 10.0 // Максимальное время в секундах, в течение которого приказ считается актуальным
 	
 	// Переменная для отслеживания времени последней проверки
 	private lastCheckTime = 0
@@ -56,13 +65,133 @@ new (class AutoPlaceWard {
 	// Объект меню
 	private readonly menu = new MenuManager()
 	
+	// Переменные для отслеживания последнего приказа игрока
+	private lastOrderType?: dotaunitorder_t
+	private lastOrderPosition?: Vector3
+	private lastOrderTarget?: Entity
+	private lastOrderAbility?: any
+	private lastOrderQueue: boolean = false
+	private lastOrderTime: number = 0
+	
 	constructor() {
 		// Подписываемся на события
 		EventsSDK.on("GameStarted", this.GameStarted.bind(this))
 		EventsSDK.on("Tick", this.Tick.bind(this))
 		EventsSDK.on("GameEnded", this.GameEnded.bind(this))
 		
+		// Подписываемся на события приказов игрока
+		EventsSDK.on("ExecuteOrder", this.OnPlayerOrder.bind(this))
+		
 		console.log("AutoPlaceWard: Скрипт загружен")
+	}
+	
+	// Обработчик события исполнения приказа игрока
+	private OnPlayerOrder(order: ExecuteOrder) {
+		// Проверяем, что приказ отдаёт игрок, а не скрипт
+		if (!order.IsPlayerInput) {
+			return
+		}
+		
+		const hero = LocalPlayer?.Hero
+		if (!hero || !hero.IsValid) {
+			return
+		}
+		
+		// Игнорируем приказы, отданные не нашему герою
+		if (!order.Issuers.includes(hero)) {
+			return
+		}
+		
+		// Игнорируем специфические команды, которые не стоит восстанавливать
+		switch (order.OrderType) {
+			case dotaunitorder_t.DOTA_UNIT_ORDER_PURCHASE_ITEM:
+			case dotaunitorder_t.DOTA_UNIT_ORDER_SELL_ITEM:
+			case dotaunitorder_t.DOTA_UNIT_ORDER_CAST_TOGGLE:
+			case dotaunitorder_t.DOTA_UNIT_ORDER_CAST_TOGGLE_AUTO:
+			case dotaunitorder_t.DOTA_UNIT_ORDER_STOP:
+			case dotaunitorder_t.DOTA_UNIT_ORDER_HOLD_POSITION:
+				return
+		}
+		
+		// Игнорируем приказы каста Plague Ward, чтобы избежать циклов
+		if (order.Ability_?.Name === this.ABILITY_NAME) {
+			return
+		}
+		
+		// Сохраняем информацию о приказе
+		this.lastOrderType = order.OrderType
+		this.lastOrderPosition = order.Position ? order.Position.Clone() : undefined
+		this.lastOrderTarget = order.Target ? order.Target : undefined
+		this.lastOrderAbility = order.Ability_
+		this.lastOrderQueue = order.Queue
+		this.lastOrderTime = GameState.RawGameTime
+		
+		console.log(`Сохранен приказ: ${this.lastOrderType}`)
+	}
+	
+	// Выполнение последнего приказа игрока
+	private resumeLastOrder(): void {
+		const hero = LocalPlayer?.Hero
+		if (!hero || !hero.IsValid || !this.lastOrderType) {
+			return
+		}
+		
+		// Проверяем, включена ли опция в меню
+		if (!this.menu.ResumeLastOrder.value) {
+			console.log("Восстановление последнего приказа отключено в меню")
+			return
+		}
+		
+		// Проверяем актуальность приказа
+		const orderAge = GameState.RawGameTime - this.lastOrderTime
+		if (orderAge > this.MAX_ORDER_AGE) {
+			console.log(`Приказ слишком старый (${orderAge.toFixed(2)} сек.), не восстанавливаем`)
+			return
+		}
+		
+		// Проверяем актуальность цели (если это юнит/объект)
+		if (this.lastOrderTarget instanceof Entity) {
+			if (!this.lastOrderTarget.IsValid || !this.lastOrderTarget.IsAlive || !this.lastOrderTarget.IsVisible) {
+				console.log(`Цель приказа (${this.lastOrderTarget.Name}) недействительна, мертва или невидима`)
+				return
+			}
+		}
+		
+		console.log(`Восстанавливаем последний приказ: ${this.lastOrderType}, возраст: ${orderAge.toFixed(2)} сек.`)
+		
+		// Восстанавливаем приказ в зависимости от его типа
+		switch (this.lastOrderType) {
+			case dotaunitorder_t.DOTA_UNIT_ORDER_MOVE_TO_POSITION:
+			case dotaunitorder_t.DOTA_UNIT_ORDER_ATTACK_MOVE:
+				if (this.lastOrderPosition) {
+					if (this.lastOrderType === dotaunitorder_t.DOTA_UNIT_ORDER_MOVE_TO_POSITION) {
+						hero.MoveTo(this.lastOrderPosition, this.lastOrderQueue)
+						console.log(`Восстановлен приказ движения на позицию: ${this.lastOrderPosition.toString()}`)
+					} else {
+						hero.AttackMove(this.lastOrderPosition, this.lastOrderQueue)
+						console.log(`Восстановлен приказ атаки движением на позицию: ${this.lastOrderPosition.toString()}`)
+					}
+				}
+				break
+			
+			case dotaunitorder_t.DOTA_UNIT_ORDER_ATTACK_TARGET:
+				if (this.lastOrderTarget instanceof Entity) {
+					hero.AttackTarget(this.lastOrderTarget, this.lastOrderQueue)
+					console.log(`Восстановлен приказ атаки цели: ${this.lastOrderTarget.Name}`)
+				}
+				break
+			
+			case dotaunitorder_t.DOTA_UNIT_ORDER_MOVE_TO_TARGET:
+				if (this.lastOrderTarget instanceof Entity) {
+					hero.MoveToTarget(this.lastOrderTarget, this.lastOrderQueue)
+					console.log(`Восстановлен приказ движения к цели: ${this.lastOrderTarget.Name}`)
+				}
+				break
+				
+			default:
+				console.log(`Приказ типа ${this.lastOrderType} не поддерживается для восстановления`)
+				break
+		}
 	}
 	
 	// Проверяем, играет ли игрок за Веномансера
@@ -225,6 +354,11 @@ new (class AutoPlaceWard {
 				this.lastCastTime = GameState.RawGameTime
 				
 				console.log("Команда на каст отправлена")
+				
+				// Восстанавливаем последний приказ игрока через небольшую задержку
+				TaskManager.InTick(10, () => {
+					this.resumeLastOrder()
+				})
 			})
 			
 			console.log("Попытка каста выполнена успешно")
