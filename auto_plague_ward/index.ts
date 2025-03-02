@@ -72,6 +72,7 @@ new (class AutoPlaceWard {
 	private lastOrderAbility?: any
 	private lastOrderQueue: boolean = false
 	private lastOrderTime: number = 0
+	private isOrderRestoreInProgress: boolean = false
 	
 	constructor() {
 		// Подписываемся на события
@@ -87,7 +88,7 @@ new (class AutoPlaceWard {
 
 	// функция в которой можно будет включать и выключать логи одной кнопкой
 	private log(...args: any[]) {
-		var enabled = false
+		var enabled = true // Временно включаем логи для отладки
 		if (enabled) {
 			console.log(...args)
 		}
@@ -107,6 +108,12 @@ new (class AutoPlaceWard {
 		
 		// Игнорируем приказы, отданные не нашему герою
 		if (!order.Issuers.includes(hero)) {
+			return
+		}
+		
+		// Если сейчас идет процесс восстановления приказа, игнорируем его сохранение
+		if (this.isOrderRestoreInProgress) {
+			this.log("Игнорируем сохранение приказа - идет процесс восстановления")
 			return
 		}
 		
@@ -134,71 +141,88 @@ new (class AutoPlaceWard {
 		this.lastOrderQueue = order.Queue
 		this.lastOrderTime = GameState.RawGameTime
 		
-		this.log(`Сохранен приказ: ${this.lastOrderType}`)
+		this.log(`Сохранен приказ: ${this.lastOrderType}, позиция: ${this.lastOrderPosition}, цель: ${this.lastOrderTarget?.Name || 'нет'}`)
 	}
 	
 	// Выполнение последнего приказа игрока
 	private resumeLastOrder(): void {
-		const hero = LocalPlayer?.Hero
-		if (!hero || !hero.IsValid || !this.lastOrderType) {
-			return
-		}
-		
-		// Проверяем, включена ли опция в меню
-		if (!this.menu.ResumeLastOrder.value) {
-			this.log("Восстановление последнего приказа отключено в меню")
-			return
-		}
-		
-		// Проверяем актуальность приказа
-		const orderAge = GameState.RawGameTime - this.lastOrderTime
-		if (orderAge > this.MAX_ORDER_AGE) {
-			this.log(`Приказ слишком старый (${orderAge.toFixed(2)} сек.), не восстанавливаем`)
-			return
-		}
-		
-		// Проверяем актуальность цели (если это юнит/объект)
-		if (this.lastOrderTarget instanceof Entity) {
-			if (!this.lastOrderTarget.IsValid || !this.lastOrderTarget.IsAlive || !this.lastOrderTarget.IsVisible) {
-				this.log(`Цель приказа (${this.lastOrderTarget.Name}) недействительна, мертва или невидима`)
+		try {
+			this.isOrderRestoreInProgress = true
+			
+			const hero = LocalPlayer?.Hero
+			if (!hero || !hero.IsValid || !this.lastOrderType) {
+				this.log("Не удалось восстановить приказ: герой недоступен или нет сохраненного приказа")
+				this.isOrderRestoreInProgress = false
 				return
 			}
-		}
-		
-		this.log(`Восстанавливаем последний приказ: ${this.lastOrderType}, возраст: ${orderAge.toFixed(2)} сек.`)
-		
-		// Восстанавливаем приказ в зависимости от его типа
-		switch (this.lastOrderType) {
-			case dotaunitorder_t.DOTA_UNIT_ORDER_MOVE_TO_POSITION:
-			case dotaunitorder_t.DOTA_UNIT_ORDER_ATTACK_MOVE:
-				if (this.lastOrderPosition) {
-					if (this.lastOrderType === dotaunitorder_t.DOTA_UNIT_ORDER_MOVE_TO_POSITION) {
-						hero.MoveTo(this.lastOrderPosition, this.lastOrderQueue)
-						this.log(`Восстановлен приказ движения на позицию: ${this.lastOrderPosition.toString()}`)
-					} else {
-						hero.AttackMove(this.lastOrderPosition, this.lastOrderQueue)
-						this.log(`Восстановлен приказ атаки движением на позицию: ${this.lastOrderPosition.toString()}`)
+			
+			// Проверяем, включена ли опция в меню
+			if (!this.menu.ResumeLastOrder.value) {
+				this.log("Восстановление последнего приказа отключено в меню")
+				this.isOrderRestoreInProgress = false
+				return
+			}
+			
+			// Проверяем актуальность приказа
+			const orderAge = GameState.RawGameTime - this.lastOrderTime
+			if (orderAge > this.MAX_ORDER_AGE) {
+				this.log(`Приказ слишком старый (${orderAge.toFixed(2)} сек.), не восстанавливаем`)
+				this.isOrderRestoreInProgress = false
+				return
+			}
+			
+			// Проверяем актуальность цели (если это юнит/объект)
+			if (this.lastOrderTarget instanceof Entity) {
+				if (!this.lastOrderTarget.IsValid || !this.lastOrderTarget.IsAlive || !this.lastOrderTarget.IsVisible) {
+					this.log(`Цель приказа (${this.lastOrderTarget.Name}) недействительна, мертва или невидима`)
+					this.isOrderRestoreInProgress = false
+					return
+				}
+			}
+			
+			this.log(`Восстанавливаем последний приказ: ${this.lastOrderType}, возраст: ${orderAge.toFixed(2)} сек.`)
+			
+			// Восстанавливаем приказ в зависимости от его типа
+			switch (this.lastOrderType) {
+				case dotaunitorder_t.DOTA_UNIT_ORDER_MOVE_TO_POSITION:
+				case dotaunitorder_t.DOTA_UNIT_ORDER_ATTACK_MOVE:
+					if (this.lastOrderPosition) {
+						if (this.lastOrderType === dotaunitorder_t.DOTA_UNIT_ORDER_MOVE_TO_POSITION) {
+							this.log(`Выполняем MoveTo на позицию: ${this.lastOrderPosition.toString()}`)
+							hero.MoveTo(this.lastOrderPosition, this.lastOrderQueue)
+							this.log(`Восстановлен приказ движения на позицию: ${this.lastOrderPosition.toString()}`)
+						} else {
+							this.log(`Выполняем AttackMove на позицию: ${this.lastOrderPosition.toString()}`)
+							hero.AttackMove(this.lastOrderPosition, this.lastOrderQueue)
+							this.log(`Восстановлен приказ атаки движением на позицию: ${this.lastOrderPosition.toString()}`)
+						}
 					}
-				}
-				break
-			
-			case dotaunitorder_t.DOTA_UNIT_ORDER_ATTACK_TARGET:
-				if (this.lastOrderTarget instanceof Entity) {
-					hero.AttackTarget(this.lastOrderTarget, this.lastOrderQueue)
-					this.log(`Восстановлен приказ атаки цели: ${this.lastOrderTarget.Name}`)
-				}
-				break
-			
-			case dotaunitorder_t.DOTA_UNIT_ORDER_MOVE_TO_TARGET:
-				if (this.lastOrderTarget instanceof Entity) {
-					hero.MoveToTarget(this.lastOrderTarget, this.lastOrderQueue)
-					this.log(`Восстановлен приказ движения к цели: ${this.lastOrderTarget.Name}`)
-				}
-				break
+					break;
 				
-			default:
-				this.log(`Приказ типа ${this.lastOrderType} не поддерживается для восстановления`)
-				break
+				case dotaunitorder_t.DOTA_UNIT_ORDER_ATTACK_TARGET:
+					if (this.lastOrderTarget instanceof Entity) {
+						this.log(`Выполняем AttackTarget на цель: ${this.lastOrderTarget.Name}`)
+						hero.AttackTarget(this.lastOrderTarget, this.lastOrderQueue)
+						this.log(`Восстановлен приказ атаки цели: ${this.lastOrderTarget.Name}`)
+					}
+					break;
+				
+				case dotaunitorder_t.DOTA_UNIT_ORDER_MOVE_TO_TARGET:
+					if (this.lastOrderTarget instanceof Entity) {
+						this.log(`Выполняем MoveToTarget на цель: ${this.lastOrderTarget.Name}`)
+						hero.MoveToTarget(this.lastOrderTarget, this.lastOrderQueue)
+						this.log(`Восстановлен приказ движения к цели: ${this.lastOrderTarget.Name}`)
+					}
+					break;
+					
+				default:
+					this.log(`Приказ типа ${this.lastOrderType} не поддерживается для восстановления`)
+					break;
+			}
+		} catch (error) {
+			this.log(`Ошибка при восстановлении приказа: ${error}`)
+		} finally {
+			this.isOrderRestoreInProgress = false
 		}
 	}
 	
@@ -369,10 +393,18 @@ new (class AutoPlaceWard {
 				// })
 				
 				// Используем TaskManager.Begin для создания задержки перед восстановлением приказа
-				// 300 мс должно быть достаточно для завершения анимации каста
+				// Пробуем несколько раз с разными задержками для надежности
+				
 				TaskManager.Begin(() => {
+					this.log("Первая попытка восстановления приказа через 500мс")
 					this.resumeLastOrder()
-				}, 300)
+				}, 500)  // Первая попытка через 500мс
+				
+				// Второй вызов с большим интервалом для надежности
+				TaskManager.Begin(() => {
+					this.log("Вторая попытка восстановления приказа через 1000мс")
+					this.resumeLastOrder()
+				}, 1000)  // Вторая попытка через 1000мс (1 секунда)
 			})
 			
 			this.log("Попытка каста выполнена успешно")
