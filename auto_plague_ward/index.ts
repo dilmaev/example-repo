@@ -31,10 +31,14 @@ class MenuManager {
 new (class AutoPlaceWard {
 	// Постоянные значения для скрипта
 	private readonly ABILITY_NAME = "venomancer_plague_ward"
-	private readonly COOLDOWN_CHECK_INTERVAL = 0.1 // Секунды
+	private readonly COOLDOWN_CHECK_INTERVAL = 0.5 // Увеличиваем интервал проверки до 0.5 секунды
+	private readonly CAST_COOLDOWN = 1.0 // Минимальное время между кастами в секундах
 	
 	// Переменная для отслеживания времени последней проверки
 	private lastCheckTime = 0
+	
+	// Переменная для отслеживания времени последнего успешного использования
+	private lastCastTime = 0
 	
 	// Объект для ограничения частоты операций
 	private readonly sleeper = new Sleeper()
@@ -136,8 +140,21 @@ new (class AutoPlaceWard {
 		const isSleeping = this.sleeper.Sleeping("cast_ward")
 		console.log(`Слипер активен: ${isSleeping}`)
 		
-		// Проверяем, что способность не в кулдауне и есть мана
-		return ability.IsReady && !(ability.IsCasting || false) && !isSleeping
+		// Проверяем время с последнего успешного использования
+		const timeSinceLastCast = GameState.RawGameTime - this.lastCastTime
+		console.log(`Время с последнего использования: ${timeSinceLastCast.toFixed(2)} сек.`)
+		
+		// Дополнительная проверка на кулдаун для надежности
+		const isOnCooldown = ability.CooldownTimeRemaining > 0 || !ability.IsReady || timeSinceLastCast < this.CAST_COOLDOWN
+		
+		if (isOnCooldown) {
+			console.log(`Способность еще в кулдауне или недавно использовалась (${timeSinceLastCast.toFixed(2)} < ${this.CAST_COOLDOWN} сек.)`)
+			return false
+		}
+		
+		// Проверяем, что способность готова, не в кулдауне, есть мана и прошло достаточно времени с последнего каста
+		return ability.IsReady && !(ability.IsCasting || false) && !isSleeping && 
+		       heroMana >= manaCost && timeSinceLastCast >= this.CAST_COOLDOWN;
 	}
 	
 	// Использование способности на самого себя (героя)
@@ -169,14 +186,23 @@ new (class AutoPlaceWard {
 					return
 				}
 				
+				// Дополнительная проверка готовности
+				if (!ability.IsReady || ability.CooldownTimeRemaining > 0) {
+					console.log("Способность внезапно оказалась не готова, отменяем каст")
+					return
+				}
+				
 				// Определяем тип способности и используем соответствующий метод каста
 				console.log("Кастуем ward на героя")
 				
 				// Используем CastTarget для кастования на самого героя
 				hero.CastTarget(ability, hero)
 				
-				// Устанавливаем слипер, чтобы не спамить попытками использования
-				this.sleeper.Sleep(0.5 * 1000, "cast_ward")
+				// Устанавливаем слипер на более длительное время
+				this.sleeper.Sleep(1.0 * 1000, "cast_ward")
+				
+				// Обновляем время последнего каста
+				this.lastCastTime = GameState.RawGameTime
 				
 				console.log("Команда на каст отправлена")
 			})
@@ -191,6 +217,7 @@ new (class AutoPlaceWard {
 	private GameStarted() {
 		console.log("AutoPlaceWard: Игра началась")
 		this.lastCheckTime = GameState.RawGameTime
+		this.lastCastTime = GameState.RawGameTime - this.CAST_COOLDOWN // Позволяем сразу использовать способность
 		this.sleeper.FullReset()
 	}
 	
