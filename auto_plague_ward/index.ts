@@ -74,6 +74,14 @@ new (class AutoPlaceWard {
 	private lastOrderTime: number = 0
 	private isOrderRestoreInProgress: boolean = false
 	
+	// Резервная копия последнего приказа для безопасности
+	private savedOrderType?: dotaunitorder_t
+	private savedOrderPosition?: Vector3
+	private savedOrderTarget?: Entity
+	private savedOrderAbility?: any
+	private savedOrderQueue: boolean = false
+	private savedOrderTime: number = 0
+	
 	constructor() {
 		// Подписываемся на события
 		EventsSDK.on("GameStarted", this.GameStarted.bind(this))
@@ -130,6 +138,7 @@ new (class AutoPlaceWard {
 		
 		// Игнорируем приказы каста Plague Ward, чтобы избежать циклов
 		if (order.Ability_?.Name === this.ABILITY_NAME) {
+			this.log(`Игнорируем приказ каста способности ${this.ABILITY_NAME}`)
 			return
 		}
 		
@@ -141,6 +150,14 @@ new (class AutoPlaceWard {
 		this.lastOrderQueue = order.Queue
 		this.lastOrderTime = GameState.RawGameTime
 		
+		// Создаем резервную копию приказа
+		this.savedOrderType = order.OrderType
+		this.savedOrderPosition = order.Position ? order.Position.Clone() : undefined
+		this.savedOrderTarget = order.Target ? order.Target : undefined
+		this.savedOrderAbility = order.Ability_
+		this.savedOrderQueue = order.Queue
+		this.savedOrderTime = GameState.RawGameTime
+		
 		this.log(`Сохранен приказ: ${this.lastOrderType}, позиция: ${this.lastOrderPosition}, цель: ${this.lastOrderTarget?.Name || 'нет'}`)
 	}
 	
@@ -150,10 +167,28 @@ new (class AutoPlaceWard {
 			this.isOrderRestoreInProgress = true
 			
 			const hero = LocalPlayer?.Hero
-			if (!hero || !hero.IsValid || !this.lastOrderType) {
-				this.log("Не удалось восстановить приказ: герой недоступен или нет сохраненного приказа")
+			if (!hero || !hero.IsValid) {
+				this.log("Не удалось восстановить приказ: герой недоступен")
 				this.isOrderRestoreInProgress = false
 				return
+			}
+			
+			// Проверяем, есть ли сохраненный приказ
+			if (!this.lastOrderType) {
+				// Если основной приказ потерян, пробуем использовать резервную копию
+				if (this.savedOrderType) {
+					this.log("Основной приказ потерян, восстанавливаем из резервной копии")
+					this.lastOrderType = this.savedOrderType
+					this.lastOrderPosition = this.savedOrderPosition
+					this.lastOrderTarget = this.savedOrderTarget
+					this.lastOrderAbility = this.savedOrderAbility
+					this.lastOrderQueue = this.savedOrderQueue
+					this.lastOrderTime = this.savedOrderTime
+				} else {
+					this.log("Не удалось восстановить приказ: нет сохраненного приказа")
+					this.isOrderRestoreInProgress = false
+					return
+				}
 			}
 			
 			// Проверяем, включена ли опция в меню
@@ -359,6 +394,16 @@ new (class AutoPlaceWard {
 				return
 			}
 			
+			// Создаем локальную копию текущего приказа прямо перед кастом
+			const backupOrderType = this.lastOrderType
+			const backupOrderPosition = this.lastOrderPosition ? this.lastOrderPosition.Clone() : undefined
+			const backupOrderTarget = this.lastOrderTarget
+			const backupOrderAbility = this.lastOrderAbility
+			const backupOrderQueue = this.lastOrderQueue
+			const backupOrderTime = this.lastOrderTime
+			
+			this.log(`Сохранена локальная копия приказа перед кастом: ${backupOrderType}`)
+			
 			// Используем TaskManager для надежного выполнения способности
 			TaskManager.Begin(() => {
 				// Проверяем еще раз перед выполнением
@@ -387,24 +432,37 @@ new (class AutoPlaceWard {
 				
 				this.log("Команда на каст отправлена")
 				
+				// Восстанавливаем приказ из локальной копии, на случай если он был сброшен кастом
+				if (!this.lastOrderType && backupOrderType) {
+					this.log("Восстанавливаем приказ из локальной копии")
+					this.lastOrderType = backupOrderType
+					this.lastOrderPosition = backupOrderPosition
+					this.lastOrderTarget = backupOrderTarget
+					this.lastOrderAbility = backupOrderAbility
+					this.lastOrderQueue = backupOrderQueue
+					this.lastOrderTime = backupOrderTime
+				}
+				
 				// Восстанавливаем последний приказ игрока через небольшую задержку
-				// TaskManager.InTick(10, () => {
-				// 	this.resumeLastOrder()
-				// })
-				
-				// Используем TaskManager.Begin для создания задержки перед восстановлением приказа
-				// Пробуем несколько раз с разными задержками для надежности
-				
 				TaskManager.Begin(() => {
 					this.log("Первая попытка восстановления приказа через 500мс")
+					this.log(`Текущий приказ: ${this.lastOrderType || 'не установлен'}`)
 					this.resumeLastOrder()
 				}, 500)  // Первая попытка через 500мс
 				
 				// Второй вызов с большим интервалом для надежности
 				TaskManager.Begin(() => {
 					this.log("Вторая попытка восстановления приказа через 1000мс")
+					this.log(`Текущий приказ: ${this.lastOrderType || 'не установлен'}`)
 					this.resumeLastOrder()
 				}, 1000)  // Вторая попытка через 1000мс (1 секунда)
+				
+				// Третья попытка с еще большей задержкой для надежности
+				TaskManager.Begin(() => {
+					this.log("Третья попытка восстановления приказа через 1500мс")
+					this.log(`Текущий приказ: ${this.lastOrderType || 'не установлен'}`)
+					this.resumeLastOrder()
+				}, 1500)  // Третья попытка через 1500мс
 			})
 			
 			this.log("Попытка каста выполнена успешно")
